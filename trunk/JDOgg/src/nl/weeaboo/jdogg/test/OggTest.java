@@ -42,7 +42,10 @@ import nl.weeaboo.jdogg.theora.VideoFrame;
 import nl.weeaboo.jdogg.vorbis.VorbisDecoder;
 
 /*
- * Seeking kills the subtitles, they dont display anymore.
+ * TODO: Seeking kills the subtitles, they dont display anymore.
+ * 
+ * TODO: Create a pool of Packet objects, allow code to explicitly give objects
+ * back to the pool.
  */
 
 public class OggTest {

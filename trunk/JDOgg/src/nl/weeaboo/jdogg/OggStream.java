@@ -56,7 +56,8 @@ public class OggStream {
 			
 			if (packet.b_o_s != 0) {
 				beginPacket = StreamUtil.clone(packet);
-			} else if (packet.e_o_s != 0) {
+			}
+			if (packet.e_o_s != 0) {
 				endPacket = StreamUtil.clone(packet);
 			}
 

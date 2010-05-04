@@ -121,10 +121,11 @@ public class VorbisAudioFileReader extends AudioFileReader {
 		try {
 			oggd.setInput(in, -1);
 			oggd.readStreamGroup(new GreedyStreamSelector(vorbisd));
-			while (!oggd.isEOF() && !vorbisd.hasReadHeaders()) {
+			while (!oggd.isEOF() && !vorbisd.hasReadHeaders()) {				
 				oggd.update();
 			}
-		} finally {		
+			oggd.flush();
+		} finally {
 			in.reset();
 		}
 		
