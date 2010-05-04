@@ -40,10 +40,12 @@ public class TheoraDecoder extends AbstractOggStreamHandler {
 	public void flush() {
 		super.flush();
 		
-		state.decodeInit(info);
-		videoFormat = new VideoFormat(info.frame_width, info.frame_height,
-				info.aspect_numerator, info.aspect_denominator,
-				info.fps_numerator, info.fps_denominator);
+		if (hasReadHeaders()) {
+			state.decodeInit(info);
+			videoFormat = new VideoFormat(info.frame_width, info.frame_height,
+					info.aspect_numerator, info.aspect_denominator,
+					info.fps_numerator, info.fps_denominator);
+		}
 		
 		packetTime = -1;
 		videoTime = -1;

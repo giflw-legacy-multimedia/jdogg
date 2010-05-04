@@ -37,7 +37,10 @@ public class KateDecoder extends AbstractOggStreamHandler {
 	public void flush() {
 		super.flush();
 		
-		state.decodeInit(info);
+		if (hasReadHeaders()) {
+			state.decodeInit(info);
+		}
+		
 		events.clear();
 	}
 	
@@ -69,7 +72,7 @@ public class KateDecoder extends AbstractOggStreamHandler {
 		if (event == null) {
 			return null;
 		}
-		
+
 		return new KateEvent(event);
 	}
 

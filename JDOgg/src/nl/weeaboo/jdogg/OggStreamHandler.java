@@ -23,7 +23,7 @@ import com.jcraft.jogg.Packet;
 
 public interface OggStreamHandler {
 	
-	public void init(OggStream stream);
+	public void setStream(OggStream stream);
 	public void process(Packet packet) throws OggException;
 	public void flush();
 	
