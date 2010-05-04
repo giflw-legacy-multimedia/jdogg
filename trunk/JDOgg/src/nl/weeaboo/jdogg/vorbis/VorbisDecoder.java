@@ -64,11 +64,13 @@ public class VorbisDecoder extends AbstractOggStreamHandler {
 	public void flush() {
 		super.flush();
 		
-		dspState.synthesis_init(info);
-		block.init(dspState);
-		pcm = new float[1][][];
-		index = new int[info.channels];
-
+		if (hasReadHeaders()) {
+			dspState.synthesis_init(info);
+			block.init(dspState);
+			pcm = new float[1][][];
+			index = new int[info.channels];
+		}
+		
 		currentSample = -1;		
 		bout.reset();
 	}

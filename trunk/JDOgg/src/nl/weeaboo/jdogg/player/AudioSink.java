@@ -1,4 +1,4 @@
-package nl.weeaboo.jdogg.test;
+package nl.weeaboo.jdogg.player;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -6,8 +6,11 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
-public class OggAudioSink {
+public class AudioSink {
 
+	private Thread thread;
+	private volatile boolean stop;
+	
 	private AudioFormat format;
 	private float bytesPerSecond;
 	
@@ -16,7 +19,7 @@ public class OggAudioSink {
 	private SourceDataLine line;
 	private long written;
 	
-	public OggAudioSink(AudioFormat fmt) {
+	public AudioSink(AudioFormat fmt) {
 		format = fmt;
 		bytesPerSecond = format.getFrameSize() * format.getFrameRate();
 		
@@ -24,7 +27,9 @@ public class OggAudioSink {
 	}
 	
 	//Functions
-	public synchronized void start() throws LineUnavailableException {
+	public synchronized void start() throws LineUnavailableException, InterruptedException {
+		stop();
+				
 		DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
 		
 		line = (SourceDataLine) AudioSystem.getLine(info);
@@ -34,12 +39,32 @@ public class OggAudioSink {
 
 		line.open(format, Math.round(bytesPerSecond * 0.2f));
 		line.start();
+		
+		stop = false;
+		thread = new Thread(new Runnable() {
+			public void run() {
+				while (!stop) {
+					flush();
+					
+					try {
+						Thread.sleep(10);
+					} catch (InterruptedException ie) {						
+					}
+				}
+
+				line.stop();
+				line.flush();
+				line.close();
+			}
+		});
+		thread.start();
 	}
 	
-	public synchronized void stop() {
-		line.stop();
-		line.flush();
-		line.close();
+	public synchronized void stop() throws InterruptedException {
+		stop = true;
+		if (thread != null) {
+			thread.join();
+		}
 	}
 	
 	public synchronized void buffer(byte b[], int off, int len) {
@@ -56,9 +81,40 @@ public class OggAudioSink {
 		bufferLength += len;
 	}
 	
-	public synchronized void reset() {
-		bufferLength = 0;
+	public synchronized void skipBytes(int bytes) {
+		long buffered = written - getLineBytePos();
 		
+		//Skip line-buffered bytes
+		if (bytes < buffered) {
+			if (line != null) {
+				line.flush();
+				written = line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);
+			}
+			return;
+		} else {
+			bytes -= buffered;
+		}
+		
+		advanceBytes(bufferLength);
+	}
+	
+	protected void advanceBytes(int bytes) {
+		//Skip regular-buffered bytes
+		bytes = Math.min(Math.max(0, bytes), bufferLength);		
+		for (int n = bytes; n < bufferLength; n++) {
+			buffer[n - bytes] = buffer[n];
+		}
+		bufferLength -= bytes;		
+	}
+	
+	public synchronized void skipTime(double time) {
+		int bytes = (int)Math.min(Integer.MAX_VALUE, Math.round(time * bytesPerSecond));
+		
+		skipBytes(bytes);
+	}
+	
+	public synchronized void reset() {
+		bufferLength = 0;		
 		if (line != null) {
 			line.flush();
 			written = line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);
@@ -81,18 +137,17 @@ public class OggAudioSink {
 		
 		int w = line.write(buffer, 0, len);
 		if (w > 0) {
-			for (int n = w; n < bufferLength; n++) {
-				buffer[n - w] = buffer[n];
-			}
-			bufferLength -= w;
+			advanceBytes(w);
 			written += w;
 		}
 	}
 	
 	//Getters
+	protected synchronized long getLineBytePos() {
+		return line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);		
+	}
 	public synchronized long getBufferLength() {
-		long lineBytePos = line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);
-		return bufferLength + (written - lineBytePos);
+		return bufferLength + (written - getLineBytePos());
 	}
 	public synchronized double getBufferDuration() {
 		return getBufferLength() / bytesPerSecond;

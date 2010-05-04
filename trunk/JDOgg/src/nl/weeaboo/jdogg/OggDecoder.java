@@ -139,7 +139,16 @@ public class OggDecoder {
 	}
 	
 	public void seekFrac(double frac) throws IOException {
-		input.setPosition(Math.round(frac * input.getLimit()));
+		long bytepos;
+		if (Math.abs(frac) <= 0.000001) {
+			bytepos = 0;
+		} else if (Math.abs(1.0 - frac) <= 0.000001) {
+			bytepos = input.getLimit();
+		} else {
+			bytepos = Math.round(frac * input.getLimit());
+		}
+		
+		input.setPosition(bytepos);
 		
 		flush();
 		

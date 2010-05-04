@@ -13,6 +13,7 @@ public class OggStream {
 	private Packet beginPacket;	
 	private Packet endPacket;	
 	private double endTime;
+	private boolean ended;
 	
 	private Packet packet = new Packet(); //Reused Packet object
 	
@@ -32,6 +33,8 @@ public class OggStream {
 		if (handler != null) {
 			handler.flush();
 		}
+		
+		ended = false;
 	}
 	
 	public void process(Page page) throws OggException {
@@ -59,6 +62,7 @@ public class OggStream {
 			}
 			if (packet.e_o_s != 0) {
 				endPacket = StreamUtil.clone(packet);
+				ended = true;
 			}
 
 			if (handler != null) {
@@ -96,13 +100,16 @@ public class OggStream {
 		}
 		return endTime;
 	}
+	public boolean isEnded() {
+		return ended;
+	}
 	
 	//Setters
 	public void setHandler(OggStreamHandler h) {
 		handler = h;
 		
 		if (handler != null) {
-			handler.init(this);
+			handler.setStream(this);
 			
 			try {
 				if (beginPacket != null) {

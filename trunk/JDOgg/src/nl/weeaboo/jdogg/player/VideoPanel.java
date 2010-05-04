@@ -1,4 +1,4 @@
-package nl.weeaboo.jdogg.test;
+package nl.weeaboo.jdogg.player;
 
 import java.awt.Color;
 import java.awt.Dimension;
@@ -19,7 +19,7 @@ import java.util.Hashtable;
 import javax.swing.JPanel;
 
 @SuppressWarnings("serial")
-public class OggVideoPanel extends JPanel implements ImageConsumer {
+public class VideoPanel extends JPanel implements ImageConsumer {
 
 	private Image image;
 	private MemoryImageSource imageModel;
@@ -28,7 +28,7 @@ public class OggVideoPanel extends JPanel implements ImageConsumer {
 	private Font subfont;
 	private String subtitles;
 	
-	public OggVideoPanel() {
+	public VideoPanel() {
 		setBackground(Color.BLACK);
 		
 		subfont = new Font("tahoma", Font.BOLD, 12);

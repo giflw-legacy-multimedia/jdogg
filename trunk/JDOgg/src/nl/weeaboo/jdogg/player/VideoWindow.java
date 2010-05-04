@@ -1,43 +1,65 @@
-package nl.weeaboo.jdogg.test;
+package nl.weeaboo.jdogg.player;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JTextArea;
+import javax.swing.JToggleButton;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 @SuppressWarnings("serial")
-public class OggVideoWindow extends JFrame {
+public class VideoWindow extends JFrame {
 
-	private OggVideoPanel videoPanel;
+	private CopyOnWriteArrayList<VideoWindowListener> videoWindowListeners;
+	
+	private VideoPanel videoPanel;
 	private JTextArea subsLabel;
+	private JToggleButton playPauseButton;
 	private JSlider slider;
 	private JLabel timeLabel;
-
-	private volatile double requestedPos = -1;
 	
-	public OggVideoWindow(String title) {
-		setTitle(title);		
-		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+	private ImageIcon playI, pauseI;
+	
+	public VideoWindow(String title) {
+		videoWindowListeners = new CopyOnWriteArrayList<VideoWindowListener>();
+				
+		playI = new ImageIcon(getClass().getResource("res/play.png"));
+		pauseI = new ImageIcon(getClass().getResource("res/pause.png"));
 		
-		videoPanel = new OggVideoPanel();
-		
+		videoPanel = new VideoPanel();		
 		add(videoPanel, BorderLayout.CENTER);
 		add(createBottomPanel(), BorderLayout.SOUTH);
 		
+		setTitle(title);		
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		setSize(800, 600);
 		setLocationRelativeTo(null);
 		setVisible(true);
 	}
 	
 	//Functions
+	public void addVideoWindowListener(VideoWindowListener vwl) {
+		synchronized (videoWindowListeners) {
+			videoWindowListeners.add(vwl);
+		}
+	}
+	public void removeVideoWindowListener(VideoWindowListener vwl) {
+		synchronized (videoWindowListeners) {
+			videoWindowListeners.remove(vwl);
+		}
+	}
+	
 	private JPanel createBottomPanel() {
 		subsLabel = new JTextArea(2, 1);
 		subsLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -47,15 +69,38 @@ public class OggVideoWindow extends JFrame {
 		subsLabel.setForeground(Color.WHITE);
 		subsLabel.setFont(new Font("tahoma", Font.BOLD, 16));
 		
+		playPauseButton = new JToggleButton();
+		playPauseButton.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				boolean p = !playPauseButton.isSelected();
+				playPauseButton.setIcon(playPauseButton.isSelected() ? pauseI : playI);
+				
+				synchronized (videoWindowListeners) {
+					for (VideoWindowListener vwl : videoWindowListeners) {
+						vwl.onPause(p);
+					}
+				}
+			}
+		});
+		
+		playPauseButton.setSelected(true);
+		playPauseButton.setIcon(pauseI);
+		
 		slider = new JSlider();		
 		slider.setBorder(new EmptyBorder(5, 5, 5, 5));
 		slider.setMinimum(0);
 		slider.setMaximum(1000000);
 		slider.setEnabled(false);
-		slider.addChangeListener(new ChangeListener() {
+		slider.getModel().addChangeListener(new ChangeListener() {
 			public void stateChanged(ChangeEvent e) {
-				if (slider.isEnabled() && slider.getValueIsAdjusting()) {
-					requestedPos = slider.getValue() / (double)slider.getMaximum();
+				if (slider.isEnabled() && !slider.getValueIsAdjusting()) {
+					double frac = slider.getValue() / (double)slider.getMaximum();
+
+					synchronized (videoWindowListeners) {
+						for (VideoWindowListener vwl : videoWindowListeners) {
+							vwl.onSeek(frac);
+						}
+					}		
 				}
 			}
 		});
@@ -65,6 +110,7 @@ public class OggVideoWindow extends JFrame {
 		
 		JPanel sliderPanel = new JPanel(new BorderLayout(10, 10));
 		sliderPanel.setBorder(new EmptyBorder(0, 10, 5, 10));
+		sliderPanel.add(playPauseButton, BorderLayout.WEST);
 		sliderPanel.add(slider, BorderLayout.CENTER);
 		sliderPanel.add(timeLabel, BorderLayout.EAST);
 		
@@ -74,18 +120,8 @@ public class OggVideoWindow extends JFrame {
 		return panel;
 	}
 
-	//Getters
-	public double getRequestedPos() {
-		if (slider.getValueIsAdjusting()) {
-			return -1;
-		}
-		
-		double r = requestedPos;
-		requestedPos = -1;
-		return r;
-	}
-	
-	public OggVideoPanel getVideoPanel() {
+	//Getters	
+	public VideoPanel getVideoPanel() {
 		return videoPanel;
 	}
 		
@@ -100,22 +136,16 @@ public class OggVideoWindow extends JFrame {
 	}
 	
 	public void setPosition(final double pos, final double maxPos) {
-		if (requestedPos >= 0) {
-			return;
-		}
-		
 		synchronized (getTreeLock()) {
-			int p = 0;
 			if (maxPos > 0) {
-				p = (int)Math.round(1000000.0 * pos / maxPos);
-
 				slider.setEnabled(false);
-				slider.setMaximum(1000000);
-				slider.setValue(p);
-				slider.setEnabled(true);					
-			} else {
-				slider.setEnabled(false);
-			}					
+				if (!slider.getValueIsAdjusting()) {
+					int p = (int)Math.round(1000000.0 * pos / maxPos);
+					slider.setMaximum(1000000);
+					slider.setValue(p);
+				}
+			}
+			slider.setEnabled(maxPos > 0);
 
 			StringBuilder sb = new StringBuilder();
 			sb.append(time(pos));

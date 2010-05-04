@@ -36,16 +36,27 @@ import nl.weeaboo.jdogg.kate.KateDecoder;
 import nl.weeaboo.jdogg.kate.KateEvent;
 import nl.weeaboo.jdogg.kate.KateRendererElement;
 import nl.weeaboo.jdogg.kate.KateRendererState;
+import nl.weeaboo.jdogg.player.AudioSink;
+import nl.weeaboo.jdogg.player.VideoWindow;
+import nl.weeaboo.jdogg.player.Player;
 import nl.weeaboo.jdogg.theora.TheoraDecoder;
 import nl.weeaboo.jdogg.theora.VideoFormat;
 import nl.weeaboo.jdogg.theora.VideoFrame;
 import nl.weeaboo.jdogg.vorbis.VorbisDecoder;
 
 /*
- * TODO: Seeking kills the subtitles, they dont display anymore.
+ * TODO: Seeking kills the subtitles for several seconds, subtitle chunks are
+ * rare and several seconds may pass before we find a new chunk. Perhaps it's
+ * possible to prescan the entire file and store all subtitle chunks for the
+ * entire files.
  * 
  * TODO: Create a pool of Packet objects, allow code to explicitly give objects
  * back to the pool.
+ * 
+ * TODO: What to do about sequential streams? Should I reuse the streamhandlers
+ * for streams that have just ended?
+ * 
+ * TODO: Once we reach the end of the file, seeking/pause/everything breaks.
  */
 
 public class OggTest {
@@ -62,11 +73,18 @@ public class OggTest {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+			
+		Player player = new Player();
+		player.setInput(new File(args[0]));
+		player.start();
 		
-		//playVorbis(args[0]);
-						
+		//playVideo(new File(args[0]));
+		//playVorbis(new File(args[0]));
+	}
+	
+	protected static void playVideo(File file) throws IOException {
 		OggDecoder decoder = new OggDecoder();
-		decoder.setInput(new File(args[0]));
+		decoder.setInput(file);
 		
 		//Scan through entire file once
 		if (decoder.isSeekable()) {
@@ -88,14 +106,16 @@ public class OggTest {
 		//Setup sinks
 		decoder.readHeaders();
 		
-		OggVideoWindow window = new OggVideoWindow("Theora/Vorbis/Kate Test Window");
+		VideoWindow window = new VideoWindow("Theora/Vorbis/Kate Test Window");
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-		final OggAudioSink audioSink = new OggAudioSink(vorbisDecoder.getAudioFormat());
+		final AudioSink audioSink = new AudioSink(vorbisDecoder.getAudioFormat());
 		try {
 			audioSink.start();
 		} catch (LineUnavailableException lue) {
 			lue.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 		
 		Timer timer = new Timer();
@@ -201,24 +221,16 @@ public class OggTest {
 				//We're lost, find some timestamp to hang on to :)
 				targetTime = decoder.getTime();
 			}
-			
-			//Fuck Yeah Seeking
-			double reqpos = window.getRequestedPos();
-			if (reqpos >= 0) {
-				decoder.seekFrac(reqpos);
-				audioSink.reset();
-				targetTime = -1;
-			}
-		}
+		}		
 	}
 	
-	protected static void playVorbis(String filename) throws IOException {
+	protected static void playVorbis(File file) throws IOException {
 		boolean limitSpeed = false;
 		
 		final VorbisDecoder vorbisDecoder = new VorbisDecoder();
 		
 		OggDecoder decoder = new OggDecoder();
-		decoder.setInput(new File(filename));		
+		decoder.setInput(file);		
 		decoder.readStreamGroup(new GreedyStreamSelector(vorbisDecoder));
 		
 		long t0 = System.nanoTime();

@@ -48,8 +48,11 @@ public abstract class AbstractOggStreamHandler implements OggStreamHandler {
 	}
 	
 	@Override
-	public void init(OggStream s) {
+	public void setStream(OggStream s) {
 		stream = s;
+		hasReadHeaders = false;
+		
+		flush();
 	}
 	
 	@Override
