@@ -1,12 +1,32 @@
+/* JDOgg
+ * 
+ * Copyright (c) 2010 Timon Bijlsma
+ *   
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public License
+ * as published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
+   
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Library General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Library General Public
+ * License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 package nl.weeaboo.jdogg.vorbis;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 import javax.sound.sampled.AudioFormat;
 
-import nl.weeaboo.jdogg.AudioException;
+import nl.weeaboo.jdogg.AbstractOggStreamHandler;
 import nl.weeaboo.jdogg.OggCodec;
-import nl.weeaboo.jdogg.OggPacketHandler;
+import nl.weeaboo.jdogg.OggException;
 
 import com.jcraft.jogg.Packet;
 import com.jcraft.jorbis.Block;
@@ -14,76 +34,75 @@ import com.jcraft.jorbis.Comment;
 import com.jcraft.jorbis.DspState;
 import com.jcraft.jorbis.Info;
 
-public class VorbisDecoder implements OggPacketHandler {
+public class VorbisDecoder extends AbstractOggStreamHandler {
 
-	private Integer stream;
 	private Info info;
 	private Comment comment;
 	private DspState dspState;
 	private Block block;
 	private float pcm[][][];
 	private int index[];
-	private int decodedSamples;
-	private boolean hasReadHeaders;
+	private long currentSample;
 	
 	private byte[] temp;
 	private ByteArrayOutputStream bout;
 	
 	public VorbisDecoder() {
+		super(OggCodec.Vorbis, false);
+		
+		info = new Info();
+		comment = new Comment();
+		dspState = new DspState();
+		block = new Block(dspState);
+
+		temp = new byte[8192];
+		bout = new ByteArrayOutputStream();
 	}
 	
 	//Functions
 	@Override
-	public void streamOpened(int streamId, int codecId) throws AudioException {
-		if (codecId == OggCodec.Vorbis.id) {
-			if (stream != null && stream.intValue() != streamId) {
-				throw new AudioException(String.format("Too many streams, playing=%d new=%d",
-						stream, streamId));
-			} else {
-				//Start stream
-				stream = streamId;
-				info = new Info();
-				comment = new Comment();
-				dspState = new DspState();
-				block = new Block(dspState);
-				decodedSamples = 0;
-				
-				temp = new byte[8192];
-				bout = new ByteArrayOutputStream();
-			}
-		}
-	}
+	public void flush() {
+		super.flush();
+		
+		dspState.synthesis_init(info);
+		block.init(dspState);
+		pcm = new float[1][][];
+		index = new int[info.channels];
 
+		currentSample = -1;		
+		bout.reset();
+	}
+	
 	@Override
-	public void handle(int streamId, Packet packet) throws AudioException {
-		if (stream != null && stream.intValue() == streamId) {
-			if (!hasReadHeaders) {
-				decodedSamples++;
-				
-				if (info.synthesis_headerin(comment, packet) < 0) {
-					throw new AudioException("Error reading headers");
-				}
-				
-				if (decodedSamples == 3) {
-					hasReadHeaders = true;
-					
-					dspState.synthesis_init(info);
-					block.init(dspState);
-					pcm = new float[1][][];
-					index = new int[info.channels];
-				}
-			} else {
-				decode(packet);				
-			}
+	protected void processHeader(Packet packet) throws OggException {		
+		if (info.synthesis_headerin(comment, packet) < 0) {
+			throw new OggException("Error reading headers");
 		}
 	}
 	
-	protected void decode(Packet packet) throws AudioException {
-		if (block.synthesis(packet) == 0) {
-			dspState.synthesis_blockin(block);
+	@Override
+	protected void processPacket(Packet packet) throws OggException {
+		if (currentSample < 0) {
+			//Skip packets until we are sure where we are in the stream again
+			if (packet.granulepos < 0) {
+				return;
+			}
+			
+			currentSample = packet.granulepos;
 		}
 		
-		int bps = 2; //Bytes per sample
+		if (packet.packetno < 3) {
+			return;
+		}
+
+		int res = block.synthesis(packet);
+		if (res == 0) {
+			dspState.synthesis_blockin(block);
+		} else {
+			return;
+		}
+				
+		int bps = getBytesPerSample();
 		int ptrinc = info.channels * bps;
 		
 		int samples;
@@ -110,41 +129,82 @@ public class VorbisDecoder implements OggPacketHandler {
 					ptr += ptrinc;
 				}
 			}
-
-			decodedSamples += samples;
 			
-			bout.write(temp, 0, len);			
+			bout.write(temp, 0, len);
+			
 			if (dspState.synthesis_read(samples) < 0) {
 				break;
 			}
 		}
 	}
-
-	@Override
-	public void streamsClosed() {
-		stream = null;
-	}
 	
 	//Getters
-	public byte[] readDecoded() {
-		byte result[] = bout.toByteArray();
-		bout.reset();
-		return result;
+	@Override
+	public boolean isBufferEmpty() {
+		return packets.isEmpty() && bout.size() == 0;
 	}
 	
-	public boolean hasDecoded() {
-		return bout != null && bout.size() > 0;
+	@Override
+	public double getTime() {
+		if (currentSample < 0 || !hasReadHeaders()) {
+			return -1;
+		}
+		return currentSample / (double)info.rate;
 	}
 	
-	public boolean hasReadHeaders() {
-		return hasReadHeaders;
+	@Override
+	public double getTime(Packet packet) {
+		if (hasReadHeaders() && packet.granulepos >= 0) {
+			return packet.granulepos / (double)info.rate;
+		}
+		return -1;
 	}
 	
+	@Override
+	public double getEndTime() {
+		if (!hasReadHeaders()) {
+			return super.getEndTime();
+		}
+		return info.rate;
+	}
+	
+	@Override
+	public double getDuration(Packet packet) {
+		return -1; //Variable bitrate, we don't know without decoding
+	}
+	
+	public int getBytesPerSample() {
+		return 2;
+	}
+	
+	public int getChannels() {
+		return (info != null ? info.channels : 2);
+	}
+
 	public AudioFormat getAudioFormat() {
-		if (!hasReadHeaders) {
+		if (!hasReadHeaders()) {
 			throw new IllegalStateException("Headers not read yet!");
 		}
-		return new AudioFormat(info.rate, 16, info.channels, true, false);
+		return new AudioFormat(info.rate, getBytesPerSample() * 8,
+				getChannels(), true, false);
+	}
+	
+	public byte[] read() throws IOException {
+		if (!hasReadHeaders()) {
+			throw new OggException("Haven't read headers yet");
+		}
+		
+		while (!packets.isEmpty()) {
+			Packet packet = packets.poll();
+			processPacket(packet);
+		}
+		
+		byte result[] = bout.toByteArray();
+		
+		currentSample += result.length / (getChannels() * getBytesPerSample());
+		bout.reset();
+		
+		return result;
 	}
 	
 	//Setters
