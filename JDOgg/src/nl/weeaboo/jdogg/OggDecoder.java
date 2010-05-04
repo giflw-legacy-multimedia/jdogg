@@ -52,8 +52,11 @@ public class OggDecoder {
 	
 	public void readStreamGroup(StreamSelectorListener sgl) throws IOException {
 		streamGroup = new StreamGroup(this, sgl);
-		while (!streamGroup.isSealed()) {
+		while (!isEOF() && !streamGroup.isSealed()) {
 			update();
+		}
+		if (isEOF() && !streamGroup.isSealed()) {
+			streamGroup.seal();
 		}
 		streamGroup = null;
 	}
