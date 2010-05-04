@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-import nl.weeaboo.jdogg.OggCodec;
 import nl.weeaboo.jdogg.OggDecoder;
 
 public class VorbisDecoderInputStream extends InputStream {
@@ -13,12 +12,9 @@ public class VorbisDecoderInputStream extends InputStream {
 	protected final VorbisDecoder vorbisDecoder;
 	private ByteBuffer buf;
 	
-	public VorbisDecoderInputStream(InputStream in) {
-		vorbisDecoder = new VorbisDecoder();
-		
-		oggDecoder = new OggDecoder();
-		oggDecoder.addPacketHandler(OggCodec.Vorbis.id, vorbisDecoder);
-		oggDecoder.setInputStream(in);
+	public VorbisDecoderInputStream(OggDecoder oggd, VorbisDecoder vorbisd) {
+		oggDecoder = oggd;
+		vorbisDecoder = vorbisd;
 		
 		buf = ByteBuffer.allocate(0);
 	}
@@ -26,16 +22,16 @@ public class VorbisDecoderInputStream extends InputStream {
 	//Functions
 	@Override
 	public int read() throws IOException {
-		if (buf.remaining() <= 0) {
-			while (!oggDecoder.isFinished() && !vorbisDecoder.hasDecoded()) {
+		while (buf.remaining() <= 0) {
+			while (!oggDecoder.isEOF() && vorbisDecoder.isBufferEmpty()) {
 				oggDecoder.update();
 			}
 			
-			if (oggDecoder.isFinished()) {
+			if (oggDecoder.isEOF()) {
 				return -1;
 			}		
 			
-			buf = ByteBuffer.wrap(vorbisDecoder.readDecoded());
+			buf = ByteBuffer.wrap(vorbisDecoder.read());
 		}
 		return (buf.get() & 0xFF);
 	}

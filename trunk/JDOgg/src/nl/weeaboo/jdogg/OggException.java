@@ -19,39 +19,17 @@
 
 package nl.weeaboo.jdogg;
 
-import javax.sound.sampled.AudioFormat;
+import java.io.IOException;
 
-public enum OggCodec {
-	
-	Vorbis(new byte[] {'v','o','r','b','i','s'}),
-	Theora(new byte[] {'t','h','e','o','r','a'}),
-	Kate(  new byte[] {'k','a','t','e'}),
-	Unknown(new byte[]{'u','n','k','n','o','w','n'});
-	
-	public final byte signature[];
-	public final AudioFormat.Encoding encoding;
-	
-	private OggCodec(byte sig[]) {
-		this.signature = sig;
-		this.encoding = new AudioFormat.Encoding(toString());
+@SuppressWarnings("serial")
+public class OggException extends IOException {
+
+	public OggException(String message) {
+		super(message);
+	}
+
+	public OggException(Throwable cause) {
+		super(cause);
 	}
 	
-	public static OggCodec fromSignature(byte sig[], int off, int len)  {
-		for (OggCodec codec : values()) {
-			boolean ok = true;
-			
-			for (int n = 0; n < Math.min(codec.signature.length, len); n++) {
-				if (codec.signature[n] != sig[off + n]) {
-					ok = false;
-					break;
-				}
-			}
-			
-			if (ok) {
-				return codec;
-			}
-		}
-		
-		return Unknown;
-	}
 }

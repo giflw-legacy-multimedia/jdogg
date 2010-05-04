@@ -14,7 +14,7 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import javax.sound.sampled.spi.AudioFileReader;
 
-import nl.weeaboo.jdogg.OggCodec;
+import nl.weeaboo.jdogg.GreedyStreamSelector;
 import nl.weeaboo.jdogg.OggDecoder;
 
 public class VorbisAudioFileReader extends AudioFileReader {
@@ -59,7 +59,6 @@ public class VorbisAudioFileReader extends AudioFileReader {
 		
 		VorbisDecoder vorbisd = new VorbisDecoder();
 		OggDecoder oggd = new OggDecoder();
-		oggd.addPacketHandler(OggCodec.Vorbis.id, vorbisd);
 		
 		if (!readHeaders(oggd, vorbisd, in)) {
 			throw new UnsupportedAudioFileException("Unable to read headers from file");
@@ -101,13 +100,12 @@ public class VorbisAudioFileReader extends AudioFileReader {
 
 		VorbisDecoder vorbisd = new VorbisDecoder();
 		OggDecoder oggd = new OggDecoder();
-		oggd.addPacketHandler(OggCodec.Vorbis.id, vorbisd);
 		
 		if (!readHeaders(oggd, vorbisd, in)) {
 			throw new UnsupportedAudioFileException("Unable to read headers from file");
 		}
 		
-		VorbisDecoderInputStream vin = new VorbisDecoderInputStream(in);
+		VorbisDecoderInputStream vin = new VorbisDecoderInputStream(oggd, vorbisd);
 		return new VorbisAudioInputStream(vin, vorbisd.getAudioFormat(), AudioSystem.NOT_SPECIFIED);
 	}
 	
@@ -121,8 +119,9 @@ public class VorbisAudioFileReader extends AudioFileReader {
 		in.mark(HEADER_READ_LIMIT + 1);
 		
 		try {
-			oggd.setInputStream(in);
-			while (!oggd.isFinished() && !vorbisd.hasReadHeaders()) {
+			oggd.setInput(in, -1);
+			oggd.readStreamGroup(new GreedyStreamSelector(vorbisd));
+			while (!oggd.isEOF() && !vorbisd.hasReadHeaders()) {
 				oggd.update();
 			}
 		} finally {		

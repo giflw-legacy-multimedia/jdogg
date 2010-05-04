@@ -3,7 +3,7 @@
 <!-- Initialize Properties -->
 	
   <property name="build.sysclasspath" value="ignore"/>
-  <property name="project-name" value="jdogg-0.1.0"/>
+  <property name="project-name" value="jdogg-0.2.0"/>
         
   <path id="classpath">
     <fileset dir="." includes="lib/**/*.jar" />
@@ -53,7 +53,7 @@
  	  	<provider classname="nl.weeaboo.jdogg.vorbis.VorbisFormatConversionProvider" />
  	  </service>
       
-      <zipfileset src="lib/cortado-0.6.0-ovt.jar"/>
+      <zipfileset src="lib/cortado-0.6.0-ovtk.jar"/>
     </jar>
   </target>
   	
