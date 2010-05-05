@@ -3,7 +3,7 @@
 <!-- Initialize Properties -->
 	
   <property name="build.sysclasspath" value="ignore"/>
-  <property name="project-name" value="jdogg-0.2.0"/>
+  <property name="project-name" value="jdogg-0.3.0"/>
         
   <path id="classpath">
     <fileset dir="." includes="lib/**/*.jar" />
@@ -43,14 +43,15 @@
     <jar destfile="${project-name}.jar" basedir="bin" includes="**">
       <manifest>
         <attribute name="Class-Path" value="${jar-classpath}"/>
+        <attribute name="Main-Class" value="nl.weeaboo.ogg.player.Player"/>
       </manifest>
     	
  	  <service type="javax.sound.sampled.spi.AudioFileReader">
- 	    <provider classname="nl.weeaboo.jdogg.vorbis.VorbisAudioFileReader" />
+ 	    <provider classname="nl.weeaboo.ogg.vorbis.VorbisAudioFileReader" />
  	  </service>
     	
  	  <service type="javax.sound.sampled.spi.FormatConversionProvider">
- 	  	<provider classname="nl.weeaboo.jdogg.vorbis.VorbisFormatConversionProvider" />
+ 	  	<provider classname="nl.weeaboo.ogg.vorbis.VorbisFormatConversionProvider" />
  	  </service>
       
       <zipfileset src="lib/cortado-0.6.0-ovtk.jar"/>
