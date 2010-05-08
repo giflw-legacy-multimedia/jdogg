@@ -40,7 +40,7 @@ import nl.weeaboo.ogg.StreamUtil;
 public class VorbisAudioFileReader extends AudioFileReader {
 	
 	public static final AudioFileFormat.Type VORBIS_TYPE = new AudioFileFormat.Type("Vorbis", "ogg");
-	private static final int HEADER_READ_LEN = 64 << 20;
+	private static final int HEADER_READ_LEN = 64 << 10;
 	
 	public VorbisAudioFileReader() {		
 	}
@@ -76,7 +76,7 @@ public class VorbisAudioFileReader extends AudioFileReader {
 	{				
 		in = (in.markSupported() ? in : new BufferedInputStream(in));
 		InputStreamView inv = new InputStreamView(in, HEADER_READ_LEN);
-		inv.mark(HEADER_READ_LEN);
+		inv.mark(HEADER_READ_LEN + 1);
 		
 		VorbisDecoder vorbisd = new VorbisDecoder();
 		OggReader reader = new OggReader();
