@@ -68,6 +68,21 @@ public abstract class AbstractOggStreamHandler<T> implements OggStreamHandler<T>
 	protected abstract void processHeader(Packet packet) throws OggException;
 	protected abstract void processPacket(Packet packet) throws OggException;
 	
+	@Override
+	public boolean trySync() throws OggException {
+		if (deferredHandling) {
+			while (isUnsynced() && !packets.isEmpty()) {
+				processPacket(packets.poll());
+			}
+			clearBuffer();
+		} else {
+			if (isUnsynced()) {
+				clearBuffer();
+			}
+		}
+		return !isUnsynced();
+	}
+	
 	//Getters
 	@Override
 	public OggCodec getCodec() {

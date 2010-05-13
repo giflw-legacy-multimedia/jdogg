@@ -174,8 +174,36 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	public boolean available() {
 		return packets.size() > 0 || bout.size() > 0;
 	}
+
+	@Override
+	public boolean trySkipTo(double time) throws OggException {
+		if (bufferEndFrame < time) {
+			bout.reset();
+			return false;
+		}
+		
+		double skipTime = bufferEndFrame - time;
+		int skipBytes = (int)Math.round(skipTime * getFrameRate() * getFrameSize());
+
+		if (skipBytes > 0) {			
+			if (skipBytes < bout.size()) {
+				byte bytes[] = bout.toByteArray();
+				bout.reset();
+				bout.write(bytes, skipBytes, bytes.length - skipBytes);
+			} else {
+				bout.reset();
+			}
+		}
+		
+		return true;
+	}
 	
 	//Getters
+	@Override
+	public boolean isUnsynced() {
+		return getTime() < 0;
+	}
+	
 	@Override
 	public double getTime() {
 		if (bufferStartFrame >= 0) {

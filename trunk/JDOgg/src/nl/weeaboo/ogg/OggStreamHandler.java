@@ -31,9 +31,12 @@ public interface OggStreamHandler<T> {
 	public void clearBuffer();
 	public T read() throws IOException;
 	public boolean available();
+	public boolean trySync() throws OggException;
+	public boolean trySkipTo(double time) throws OggException;
 	
 	public OggCodec getCodec();
 	public boolean hasReadHeaders();
+	public boolean isUnsynced();
 	
 	public double getTime();
 	public double getEndTime();
