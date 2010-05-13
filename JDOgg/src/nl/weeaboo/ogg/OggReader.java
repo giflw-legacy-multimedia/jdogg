@@ -191,7 +191,75 @@ public class OggReader {
 		}
 	}
 	
-	public void seekFrac(double frac) throws IOException {
+	public void seekExact(OggStreamHandler<?> primary, double frac) throws IOException {
+		if (!isSeekable()) {
+			throw new IOException("Current OggInput isn't seekable");
+		}
+
+		double min = 0.0;
+		double max = 1.0;
+		double guess = frac;
+		double endTime = primary.getEndTime();
+		double time = frac * endTime;
+		
+		double lastGuess = 0;
+		double lastError = Float.MAX_VALUE;
+		
+		do {
+			//System.out.println(guess + " " + min + " " + max + " " + lastError);
+			
+			seekApprox(guess);
+			while (!primary.trySync() && !isEOF()) {
+				read();
+			}
+			
+			double curTime = (primary.getTime() >= 0 ? primary.getTime() : endTime);
+			double error = Math.abs(curTime - time);
+			if (error < lastError) {
+				if (curTime > time) {
+					max = guess;
+				} else {
+					min = guess;
+				}
+				
+				lastError = error;
+				lastGuess = guess;
+				guess = min + (max - min) / 2; //Binary search
+			} else {
+				//Error increases or stayed the same, use last estimate.
+				guess = lastGuess;
+				break;
+			}			
+		} while (true);
+		
+		seekApprox(guess);
+		while (!primary.trySync()) {
+			read();
+		}
+		
+		//Go forth from the keyframe onward
+		while (!primary.trySkipTo(time)) {
+			read();
+		}
+		
+		/*
+		boolean ok;
+		do {
+			ok = true;
+			for (OggStream stream : getStreams()) {
+				OggStreamHandler<?> h = stream.getHandler();
+				if (h != null && !primary.trySkipTo(time)) {
+					ok = false;
+					break;
+				}
+			}
+			if (!ok) {
+				read();
+			}
+		} while (!ok);
+		*/
+	}
+	public void seekApprox(double frac) throws IOException {
 		if (!isSeekable()) {
 			throw new IOException("Current OggInput isn't seekable");
 		}
@@ -209,8 +277,6 @@ public class OggReader {
 
 		RandomOggInput rinput = (RandomOggInput)input;
 		pageReader.setInput(rinput.openStream(bytepos, input.length() - bytepos));
-				
-		//TODO: Seek primary OggStream to correct -time-, not just a byte position		
 	}
 	
 	//Getters

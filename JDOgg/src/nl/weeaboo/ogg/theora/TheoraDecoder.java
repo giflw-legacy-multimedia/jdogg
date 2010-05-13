@@ -136,6 +136,11 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 	
 	//Getters
 	@Override
+	public boolean isUnsynced() {
+		return unsynced || getTime() < 0;
+	}
+	
+	@Override
 	public boolean available() {
 		return packets.size() > 0 || frames.size() > 0;
 	}
@@ -173,6 +178,18 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 		if (hasReadHeaders()) {
 			bufferStartTime += videoFormat.getFrameDuration();
 		}
+	}
+	
+	@Override
+	public boolean trySkipTo(double time) throws OggException {
+		while (available()) {
+			double frameDuration = videoFormat.getFrameDuration();
+			if (getTime() + frameDuration >= time) {
+				return true;
+			}
+			skip();
+		}
+		return false;
 	}
 	
 	@Override

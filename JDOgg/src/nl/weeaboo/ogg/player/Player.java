@@ -43,7 +43,7 @@ public class Player implements Runnable {
 	private volatile boolean stop;
 	private volatile boolean pauseState;
 	private volatile boolean pauseRequest;
-	private volatile double seekRequest;
+	private volatile double seekRequestFrac, seekRequestTime;
 	
 	private VideoWindow window;
 	private AudioSink asink;
@@ -62,7 +62,7 @@ public class Player implements Runnable {
 				setPaused(p);
 			}
 			public void onSeek(double frac) {
-				seek(frac);
+				seekTime(frac);
 			}
 		});
 		
@@ -172,21 +172,24 @@ public class Player implements Runnable {
 					asink.reset();
 				}
 				
-				System.out.printf("T=%.2f V=%.2f A=%.2f DIFF=%.2f\n", targetTime, theorad.getTime(), asink.getTime(), theorad.getTime() - asink.getTime());			
+				//System.out.printf("T=%.2f V=%.2f A=%.2f DIFF=%.2f\n", targetTime, theorad.getTime(), asink.getTime(), theorad.getTime() - asink.getTime());			
 				
 				//Process Vorbis
-				if (targetTime < 0 || targetTime >= vorbisd.getTime() - 0.5) {
+				while (targetTime < 0 || targetTime >= vorbisd.getTime() - 0.50) {
 					while (!oggReader.isEOF() && !vorbisd.available()) {
 						oggReader.read();
 					}
-					if (vorbisd.available()) {
-						byte bytes[] = vorbisd.read();
-						double time = vorbisd.getTime();
-						asink.buffer(bytes, time);
-						
-						if (targetTime < 0) {
-							targetTime = asink.getTime();
-						}
+					
+					if (!vorbisd.available()) {
+						break;
+					}
+					
+					byte bytes[] = vorbisd.read();
+					double time = vorbisd.getTime();
+					asink.buffer(bytes, time);
+					
+					if (targetTime < 0) {
+						targetTime = asink.getTime();
 					}
 				}
 							
@@ -245,12 +248,17 @@ public class Player implements Runnable {
 					}
 					
 					//Fuck Yeah Seeking
-					if (seekRequest >= 0) {
-						oggReader.seekFrac(seekRequest);
+					if (seekRequestFrac >= 0 || seekRequestTime >= 0) {
+						if (seekRequestTime >= 0) {
+							oggReader.seekExact((theorad != null ? theorad : vorbisd),
+									seekRequestTime);
+						} else {
+							oggReader.seekApprox(seekRequestFrac);
+						}
 						lastTime = System.nanoTime();
 						
 						targetTime = -1;						
-						seekRequest = -1;
+						seekRequestFrac = seekRequestTime = -1;
 					} else if (oggReader.isEOF()) {
 						window.setPositionTime(theorad.getEndTime(), theorad.getEndTime());
 						window.setPositionBytes(theorad.getEndTime(), theorad.getEndTime());
@@ -270,8 +278,11 @@ public class Player implements Runnable {
 		}
 	}
 		
-	public synchronized void seek(double s) {
-		seekRequest = s;
+	public synchronized void seekFrac(double s) {
+		seekRequestFrac = s;
+	}
+	public synchronized void seekTime(double t) {
+		seekRequestTime = t;
 	}
 	
 	protected void sleep(double time) {
