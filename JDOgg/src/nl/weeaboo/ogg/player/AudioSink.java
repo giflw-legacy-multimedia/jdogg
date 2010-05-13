@@ -79,6 +79,7 @@ public class AudioSink {
 				line.close();
 			}
 		});
+		thread.setDaemon(true);
 		thread.start();
 	}
 	

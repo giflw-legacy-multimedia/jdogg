@@ -44,8 +44,11 @@ public class Player implements Runnable {
 	private volatile boolean pauseState;
 	private volatile boolean pauseRequest;
 	private volatile double seekRequestFrac, seekRequestTime;
+	private volatile boolean ended;
+	private boolean inputOk;
 	
-	private VideoWindow window;
+	private PlayerListener control;
+	private VideoSink vsink;
 	private AudioSink asink;
 
 	//Only use within run() method
@@ -54,17 +57,9 @@ public class Player implements Runnable {
 	private VorbisDecoder vorbisd;
 	//private KateDecoder kated;
 		
-	public Player() {		
-		window = new VideoWindow("Theora/Vorbis/Kate Player");
-		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		window.addVideoWindowListener(new VideoWindowListener() {
-			public void onPause(boolean p) {
-				setPaused(p);
-			}
-			public void onSeek(double frac) {
-				seekTime(frac);
-			}
-		});
+	public Player(PlayerListener control, VideoSink vsink) {				
+		this.control = control;
+		this.vsink = vsink;
 		
 		oggReader = new OggReader();
 	}
@@ -82,28 +77,47 @@ public class Player implements Runnable {
 			e.printStackTrace();
 		}
 
-		Player player = new Player();
+		VideoWindow window = new VideoWindow("Theora/Vorbis/Kate Player");
+		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		
+		final Player player = new Player(window, window.getVideoPanel());
 		player.setInput(StreamUtil.getOggInput(new File(args[0])));
 		//player.setInput(new URL("http://jvn.x10hosting.com/jdogg/small.ogv"));
 		//player.setInput(new URL("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
 		player.start();		
+
+		window.addVideoWindowListener(new VideoWindowListener() {
+			public void onPause(boolean p) {
+				player.setPaused(p);
+			}
+			public void onSeek(double frac) {
+				player.seekTime(frac);
+			}
+		});
 	}
 	
 	public synchronized void start() {
 		stop();
 		
 		stop = false;
+		ended = false;
+		
+		if (!inputOk) {
+			throw new RuntimeException("Player input not set");
+		}
+		
 		thread = new Thread(this);
 		thread.start();
 	}
-	public synchronized void stop() {
+	public void stop() {
 		stop = true;
 		
 		if (thread != null) {
 			try {
+				thread.interrupt();
 				thread.join();
 			} catch (InterruptedException ie) {
-				ie.printStackTrace();
+				//Ignore
 			}
 			thread = null;
 		}
@@ -118,7 +132,7 @@ public class Player implements Runnable {
 		} catch (LineUnavailableException lue) {
 			lue.printStackTrace();
 		} catch (InterruptedException e) {
-			e.printStackTrace();
+			//Ignore
 		}		
 	}
 	
@@ -127,7 +141,7 @@ public class Player implements Runnable {
 			try {
 				asink.stop();
 			} catch (InterruptedException ie) {
-				ie.printStackTrace();
+				//Ignore
 			}
 			asink = null;
 		}
@@ -162,7 +176,7 @@ public class Player implements Runnable {
 					
 					VideoFrame frame = theorad.read();
 					if (frame == null) continue;
-					frame.readPixels(window.getVideoPanel());					
+					frame.readPixels(vsink);					
 					if (targetTime < 0) break;
 				}
 				
@@ -220,17 +234,19 @@ public class Player implements Runnable {
 				}
 				
 				//Go sleep for a bit if there's nothing more to do
-				if (oggReader.isEOF()) {
+				ended = oggReader.isEOF() && !theorad.available()
+					&& !vorbisd.available();
+				if (ended) {
 					pauseRequest = true;
 					sleep(0.1);
 				}
 				
 				//Handle requests from Player
 				synchronized (this) {
-					while (pauseRequest) {
+					while (pauseRequest && !stop) {
 						pauseState = true;
+						control.onPauseChanged(pauseState);
 						asink.reset();
-						window.setPaused(true);
 						
 						notify();						
 						try {
@@ -241,9 +257,8 @@ public class Player implements Runnable {
 					
 					if (pauseState) {
 						lastTime = System.nanoTime();
-						window.setPaused(false);
-
 						pauseState = false;
+						control.onPauseChanged(pauseState);
 						notifyAll();						
 					}
 					
@@ -260,11 +275,12 @@ public class Player implements Runnable {
 						targetTime = -1;						
 						seekRequestFrac = seekRequestTime = -1;
 					} else if (oggReader.isEOF()) {
-						window.setPositionTime(theorad.getEndTime(), theorad.getEndTime());
-						window.setPositionBytes(theorad.getEndTime(), theorad.getEndTime());
+						control.onTimeChanged(theorad.getEndTime(), theorad.getEndTime(), 1f);
 					} else if (theorad.getTime() >= 0) {
-						window.setPositionTime(theorad.getTime(), theorad.getEndTime());
-						window.setPositionBytes(theorad.getTime(), theorad.getEndTime());
+						double time = theorad.getTime();
+						double endTime = theorad.getEndTime();
+						double frac = (endTime < 0 ? -1 : time / endTime);
+						control.onTimeChanged(time, endTime, frac);
 					}
 
 				}
@@ -293,8 +309,29 @@ public class Player implements Runnable {
 	}
 	
 	//Getters
+	public int getWidth() {
+		if (theorad == null) return 0;
+		VideoFormat fmt = theorad.getVideoFormat();
+		return fmt.getWidth();
+	}
+	public int getHeight() {
+		if (theorad == null) return 0;
+		VideoFormat fmt = theorad.getVideoFormat();
+		return fmt.getHeight();
+	}
+	public double getFPS() {
+		if (theorad == null) return 30;
+		VideoFormat fmt = theorad.getVideoFormat();
+		if (fmt.getFPSDenominator() == 0) {
+			return 30;
+		}
+		return fmt.getFPSNumerator() / fmt.getFPSDenominator();
+	}
 	public boolean isPaused() {
 		return pauseState;
+	}
+	public boolean isEnded() {
+		return ended;
 	}
 	
 	//Setters
@@ -307,11 +344,17 @@ public class Player implements Runnable {
 		//oggReader.addStreamHandler(kated = new KateDecoder());
 
 		//Read headers
-		oggReader.readStreamHeaders();		
+		oggReader.readStreamHeaders();
+		
+		inputOk = true;
 	}
 	
 	public synchronized void setPaused(boolean p) {
 		do {
+			if (stop) {
+				return;
+			}
+			
 			pauseRequest = p;
 			
 			notify();
