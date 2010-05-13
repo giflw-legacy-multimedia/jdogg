@@ -38,7 +38,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 @SuppressWarnings("serial")
-public class VideoWindow extends JFrame {
+public class VideoWindow extends JFrame implements PlayerListener {
 
 	private CopyOnWriteArrayList<VideoWindowListener> videoWindowListeners;
 	
@@ -138,7 +138,7 @@ public class VideoWindow extends JFrame {
 		panel.add(sliderPanel, BorderLayout.SOUTH);		
 		return panel;
 	}
-
+	
 	//Getters	
 	public VideoPanel getVideoPanel() {
 		return videoPanel;
@@ -154,35 +154,23 @@ public class VideoWindow extends JFrame {
 		}
 	}
 	
-	public void setPositionTime(final double pos, final double maxPos) {
+	@Override
+	public void onTimeChanged(double time, double endTime, double frac) {
 		synchronized (getTreeLock()) {
 			StringBuilder sb = new StringBuilder();
-			sb.append(time(pos));
-			if (maxPos > 0) {
-				sb.append("/" + time(maxPos));
+			sb.append(time(time));
+			if (endTime > 0) {
+				sb.append("/" + time(endTime));
 			}				
-			timeLabel.setText(sb.toString());			
-		}
-	}
-	
-	public void setPositionBytes(final double pos, final double maxPos) {
-		synchronized (getTreeLock()) {
-			if (maxPos > 0) {
-				slider.setEnabled(false);
-				if (!slider.getValueIsAdjusting()) {
-					int p = (int)Math.round(1000000.0 * pos / maxPos);
-					slider.setMaximum(1000000);
-					slider.setValue(p);
-				}
-			}
-			slider.setEnabled(maxPos > 0);
-		}
-	}
-	
-	public void setPaused(boolean p) {
-		synchronized (getTreeLock()) {
-			playPauseButton.setSelected(!p);
-			playPauseButton.setIcon(playPauseButton.isSelected() ? pauseI : playI);
+			timeLabel.setText(sb.toString());
+			
+			slider.setEnabled(false);
+			if (!slider.getValueIsAdjusting()) {
+				int p = (int)Math.round(1000000.0 * frac);
+				slider.setMaximum(1000000);
+				slider.setValue(p);
+			}			
+			slider.setEnabled(endTime > 0);
 		}
 	}
 	
@@ -202,6 +190,14 @@ public class VideoWindow extends JFrame {
 		sb.append(String.format("%02d", seconds));
 		
 		return sb.toString();
+	}
+
+	@Override
+	public void onPauseChanged(boolean p) {
+		synchronized (getTreeLock()) {
+			playPauseButton.setSelected(!p);
+			playPauseButton.setIcon(playPauseButton.isSelected() ? pauseI : playI);
+		}
 	}
 	
 }

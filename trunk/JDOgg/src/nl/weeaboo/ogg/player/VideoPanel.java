@@ -29,7 +29,6 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.image.ColorModel;
-import java.awt.image.ImageConsumer;
 import java.awt.image.MemoryImageSource;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
@@ -38,11 +37,12 @@ import java.util.Hashtable;
 import javax.swing.JPanel;
 
 @SuppressWarnings("serial")
-public class VideoPanel extends JPanel implements ImageConsumer {
+public class VideoPanel extends JPanel implements VideoSink {
 
 	private Image image;
 	private MemoryImageSource imageModel;
 	private Dimension size;
+	private int[] pixels;
 	
 	private Font subfont;
 	private String subtitles;
@@ -117,6 +117,18 @@ public class VideoPanel extends JPanel implements ImageConsumer {
 		repaint();
 	}
 	
+	//Getters
+	public int[] get() {
+		return pixels;
+	}
+	public int getImageWidth() {
+		return size.width;
+	}
+	public int getImageHeight() {
+		return size.height;
+	}
+	
+	//Setters
 	public void setDimensions(int width, int height) {
 		size = new Dimension(width, height);
 		
@@ -129,6 +141,8 @@ public class VideoPanel extends JPanel implements ImageConsumer {
 	}
 	
 	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] pixels, int off, int scansize) {
+		this.pixels = pixels;
+		
 		if (imageModel == null) {
 			imageModel = new MemoryImageSource(w, h, pixels, off, scansize);
 			imageModel.setAnimated(true);
