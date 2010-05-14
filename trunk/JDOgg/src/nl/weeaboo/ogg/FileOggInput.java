@@ -82,6 +82,16 @@ public class FileOggInput implements RandomOggInput {
 		
 	//Getters
 	@Override
+	public boolean isReadSlow() {
+		return false;
+	}
+	
+	@Override
+	public boolean isSeekSlow() {
+		return false;
+	}
+	
+	@Override
 	public long length() throws IOException {
 		return channel.size();
 	}

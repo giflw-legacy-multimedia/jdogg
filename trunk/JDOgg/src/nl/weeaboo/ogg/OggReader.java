@@ -116,13 +116,10 @@ public class OggReader {
 		RandomOggInput rinput = (RandomOggInput)input;
 		
 		int chunkLen = (64 << 10);		
-		long off = rinput.length();
 		long len = chunkLen;
-		while (off > 0) {
+		long off = rinput.length() - chunkLen;
+		while (off > 0) {			
 			int diff = (int)Math.min(off, chunkLen);
-			off -= diff;
-			len += diff;
-			
 			InputStream ein = rinput.openStream(off, len);
 			try {
 				pageReader.setInput(ein, diff);
@@ -143,6 +140,9 @@ public class OggReader {
 			if (hasSeenData) {
 				break;
 			}
+
+			off -= diff;
+			len += diff;
 		}
 				
 		for (OggStream stream : streams) {
@@ -209,7 +209,7 @@ public class OggReader {
 			//System.out.println(guess + " " + min + " " + max + " " + lastError);
 			
 			seekApprox(guess);
-			while (!primary.trySync() && !isEOF()) {
+			while (!isEOF() && !primary.trySync()) {
 				read();
 			}
 			
@@ -233,13 +233,16 @@ public class OggReader {
 		} while (true);
 				
 		seekApprox(guess);
-		while (!primary.trySync()) {
+		while (!isEOF() && !primary.trySync()) {
 			read();
 		}
 		
 		//Go forth from the keyframe onward
-		while (!primary.trySkipTo(time)) {
-			read();
+		RandomOggInput rinput = (RandomOggInput)input;
+		if (!rinput.isReadSlow()) {
+			while (!isEOF() && !primary.trySkipTo(time)) {
+				read();
+			}
 		}
 				
 		/*
@@ -308,7 +311,15 @@ public class OggReader {
 	}
 	
 	public boolean isSeekable() {
-		return input != null && input instanceof RandomOggInput;
+		return input instanceof RandomOggInput;
+	}
+	
+	public boolean isSeekSlow() {
+		if (input instanceof RandomOggInput) {
+			RandomOggInput rinput = (RandomOggInput)input;
+			return rinput.isSeekSlow();
+		}
+		return true;
 	}
 	
 	public boolean isEOF() {

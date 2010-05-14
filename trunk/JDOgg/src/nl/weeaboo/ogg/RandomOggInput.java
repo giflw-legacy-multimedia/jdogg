@@ -27,4 +27,7 @@ public interface RandomOggInput extends OggInput {
 	public InputStream openStream(long off, long len) throws IOException;
 	public int read(byte[] b, int off, long foff, int len) throws IOException;	
 	
+	public boolean isReadSlow();
+	public boolean isSeekSlow();
+	
 }
