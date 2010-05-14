@@ -19,9 +19,9 @@
 
 package nl.weeaboo.ogg.player;
 
-import java.io.File;
 import java.io.IOException;
 
+import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.LineUnavailableException;
 import javax.swing.JFrame;
 import javax.swing.UIManager;
@@ -43,7 +43,7 @@ public class Player implements Runnable {
 	private volatile boolean stop;
 	private volatile boolean pauseState;
 	private volatile boolean pauseRequest;
-	private volatile double seekRequestFrac, seekRequestTime;
+	private volatile double seekRequest;
 	private volatile boolean ended;
 	private boolean inputOk;
 	
@@ -81,9 +81,9 @@ public class Player implements Runnable {
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		
 		final Player player = new Player(window, window.getVideoPanel());
-		player.setInput(StreamUtil.getOggInput(new File(args[0])));
-		//player.setInput(new URL("http://jvn.x10hosting.com/jdogg/small.ogv"));
-		//player.setInput(new URL("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
+		//player.setInput(StreamUtil.getOggInput(new File(args[0])));
+		//player.setInput(StreamUtil.getOggInput("http://jvn.x10hosting.com/jdogg/small.ogv"));
+		player.setInput(StreamUtil.getOggInput("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
 		player.start();		
 
 		window.addVideoWindowListener(new VideoWindowListener() {
@@ -91,7 +91,7 @@ public class Player implements Runnable {
 				player.setPaused(p);
 			}
 			public void onSeek(double frac) {
-				player.seekTime(frac);
+				player.seek(frac);
 			}
 		});
 	}
@@ -101,7 +101,7 @@ public class Player implements Runnable {
 		
 		stop = false;
 		ended = false;
-		seekRequestFrac = seekRequestTime = -1;
+		seekRequest = -1;
 		
 		if (!inputOk) {
 			throw new RuntimeException("Player input not set");
@@ -127,7 +127,15 @@ public class Player implements Runnable {
 	protected void startAudio() {
 		stopAudio();
 		
-		asink = new AudioSink(vorbisd.getAudioFormat());
+		if (vorbisd == null) {
+			return;
+		}
+		AudioFormat format = vorbisd.getAudioFormat();
+		if (format == null) {
+			return;
+		}
+		
+		asink = new AudioSink(format);
 		try {
 			asink.start();
 		} catch (LineUnavailableException lue) {
@@ -184,7 +192,7 @@ public class Player implements Runnable {
 				if (targetTime < 0) {
 					targetTime = theorad.getTime();
 					vorbisd.clearBuffer();
-					asink.reset();
+					if (asink != null) asink.reset();
 				}
 				
 				//System.out.printf("T=%.2f V=%.2f A=%.2f DIFF=%.2f\n", targetTime, theorad.getTime(), asink.getTime(), theorad.getTime() - asink.getTime());			
@@ -216,7 +224,7 @@ public class Player implements Runnable {
 					//Sync audio
 					double atime = asink.getTime();
 					double adiff = targetTime - atime;
-					if (atime >= 0 && Math.abs(adiff) > audioSync
+					if (asink != null && atime >= 0 && Math.abs(adiff) > audioSync
 							&& asink.getBufferLength() > 0)
 					{
 						targetTime -= adiff * Math.min(1.0, 10 * dt);
@@ -228,7 +236,7 @@ public class Player implements Runnable {
 
 				//Limit time
 				double vwait = theorad.getTime() - targetTime;
-				double await = asink.getBufferDuration();
+				double await = (asink != null ? asink.getBufferDuration() : 0);
 				double w = Math.min(vwait, await);
 				if (w >= 0.001) {
 					sleep(w);
@@ -247,7 +255,7 @@ public class Player implements Runnable {
 					while (pauseRequest && !stop) {
 						pauseState = true;
 						control.onPauseChanged(pauseState);
-						asink.reset();
+						if (asink != null) asink.reset();
 						
 						notify();						
 						try {
@@ -264,17 +272,17 @@ public class Player implements Runnable {
 					}
 					
 					//Fuck Yeah Seeking
-					if (seekRequestFrac >= 0 || seekRequestTime >= 0) {
-						if (seekRequestTime >= 0) {
+					if (seekRequest >= 0) {
+						//if (!oggReader.isSeekSlow()) {
 							oggReader.seekExact((theorad != null ? theorad : vorbisd),
-									seekRequestTime);
-						} else {
-							oggReader.seekApprox(seekRequestFrac);
-						}
+									seekRequest);
+						//} else {
+						//	oggReader.seekApprox(seekRequest);
+						//}
 						lastTime = System.nanoTime();
 						
 						targetTime = -1;						
-						seekRequestFrac = seekRequestTime = -1;
+						seekRequest = -1;
 					} else if (oggReader.isEOF()) {
 						control.onTimeChanged(theorad.getEndTime(), theorad.getEndTime(), 1f);
 					} else if (theorad.getTime() >= 0) {
@@ -294,11 +302,8 @@ public class Player implements Runnable {
 		}
 	}
 		
-	public synchronized void seekFrac(double s) {
-		seekRequestFrac = s;
-	}
-	public synchronized void seekTime(double t) {
-		seekRequestTime = t;
+	public synchronized void seek(double s) {
+		seekRequest = s;
 	}
 	
 	protected void sleep(double time) {

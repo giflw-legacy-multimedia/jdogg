@@ -175,6 +175,8 @@ public class VideoWindow extends JFrame implements PlayerListener {
 	}
 	
 	private String time(double time) {
+		if (time < 0) time = 0;
+		
 		int seconds = (int)Math.round(time);
 		int minutes = seconds / 60;
 		int hours = minutes / 60;

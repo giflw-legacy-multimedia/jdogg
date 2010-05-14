@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 
 import com.jcraft.jogg.Packet;
 
@@ -42,6 +43,12 @@ public class StreamUtil {
 		return r;
 	}
 	
+	public static OggInput getOggInput(String uri) throws IOException {
+		if (uri.startsWith("http://")) {
+			return getOggInput(new URL(uri));
+		}
+		return getOggInput(new File(uri));
+	}
 	public static OggInput getOggInput(File file) throws IOException {
 		return getOggInput(new FileInputStream(file));
 	}
@@ -51,6 +58,9 @@ public class StreamUtil {
 			return new FileOggInput(fin);
 		}
 		return new BasicOggInput(in);
+	}
+	public static OggInput getOggInput(URL url) throws IOException {
+		return new URLInput(url);
 	}
 	
 }
