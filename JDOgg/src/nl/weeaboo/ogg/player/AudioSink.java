@@ -32,6 +32,7 @@ public class AudioSink {
 	
 	private AudioFormat format;
 	private float bytesPerSecond;
+	private int bytesPerFrame;
 	private float lineBufferDuration = 0.25f;
 	
 	private byte buffer[];
@@ -42,7 +43,8 @@ public class AudioSink {
 	
 	public AudioSink(AudioFormat fmt) {
 		format = fmt;
-		bytesPerSecond = format.getFrameSize() * format.getFrameRate();
+		bytesPerFrame = format.getFrameSize();
+		bytesPerSecond = bytesPerFrame * format.getFrameRate();
 		
 		buffer = new byte[8192];
 	}
@@ -133,7 +135,7 @@ public class AudioSink {
 		if (line != null) {
 			line.flush();
 			
-			written = line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);
+			written = line.getLongFramePosition() * bytesPerFrame;
 		}
 	}
 	
@@ -162,7 +164,9 @@ public class AudioSink {
 	
 	//Getters
 	public synchronized double getTime() {
-		return bufferEndTime - getBufferDuration() - 2 * lineBufferDuration;
+		//double lbd = lineBufferDuration * 2;
+		double lbd = (written - line.getLongFramePosition() * bytesPerFrame) / bytesPerSecond;
+		return bufferEndTime - getBufferDuration() - lbd;
 	}
 	public synchronized long getBufferLength() {
 		long lineBuffered = 0; //line.getBufferSize() - line.available();

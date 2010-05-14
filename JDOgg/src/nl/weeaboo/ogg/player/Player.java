@@ -101,6 +101,7 @@ public class Player implements Runnable {
 		
 		stop = false;
 		ended = false;
+		seekRequestFrac = seekRequestTime = -1;
 		
 		if (!inputOk) {
 			throw new RuntimeException("Player input not set");
@@ -153,7 +154,7 @@ public class Player implements Runnable {
 		try {
 			//KateRendererState krs = new KateRendererState();
 						
-			double targetTime = 0;
+			double targetTime = -1;
 			long lastTime = System.nanoTime();		
 			while (!stop) {				
 				//Process Theora
@@ -282,7 +283,6 @@ public class Player implements Runnable {
 						double frac = (endTime < 0 ? -1 : time / endTime);
 						control.onTimeChanged(time, endTime, frac);
 					}
-
 				}
 			}		
 		} catch (IOException ioe) {
