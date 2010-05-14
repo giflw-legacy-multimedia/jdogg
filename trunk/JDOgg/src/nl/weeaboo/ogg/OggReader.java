@@ -231,7 +231,7 @@ public class OggReader {
 				break;
 			}			
 		} while (true);
-		
+				
 		seekApprox(guess);
 		while (!primary.trySync()) {
 			read();
@@ -241,7 +241,7 @@ public class OggReader {
 		while (!primary.trySkipTo(time)) {
 			read();
 		}
-		
+				
 		/*
 		boolean ok;
 		do {
