@@ -43,6 +43,7 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 	private boolean unsynced;
 	
 	private Queue<VideoFrame> frames;
+	private YUVBuffer yuvBuffer;
 	private double bufferStartTime, bufferEndTime;
 	
 	public TheoraDecoder() {
@@ -80,9 +81,12 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 	@Override
 	protected void onHeadersRead() {
 		state.decodeInit(info);
+		
 		videoFormat = new VideoFormat(info.frame_width, info.frame_height,
 				info.aspect_numerator, info.aspect_denominator,
 				info.fps_numerator, info.fps_denominator);
+		
+		yuvBuffer = new YUVBuffer();
 	}
 
 	@Override
@@ -98,7 +102,11 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 			return;
 		}
 		
-		YUVBuffer yuvBuffer = new YUVBuffer();
+		if (frames.size() >= 1) {
+			//Our old yuv buffer is still in use.
+			yuvBuffer = new YUVBuffer();
+		}
+		
 		if (state.decodeYUVout(yuvBuffer) != 0) {
 			throw new OggException("Error decoding YUV from Theora packet");
 		}
