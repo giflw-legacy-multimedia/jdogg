@@ -314,17 +314,17 @@ public class Player implements Runnable {
 	}
 	
 	//Getters
-	public int getWidth() {
+	public synchronized int getWidth() {
 		if (theorad == null) return 0;
 		VideoFormat fmt = theorad.getVideoFormat();
 		return fmt.getWidth();
 	}
-	public int getHeight() {
+	public synchronized int getHeight() {
 		if (theorad == null) return 0;
 		VideoFormat fmt = theorad.getVideoFormat();
 		return fmt.getHeight();
 	}
-	public double getFPS() {
+	public synchronized double getFPS() {
 		if (theorad == null) return 30;
 		VideoFormat fmt = theorad.getVideoFormat();
 		if (fmt.getFPSDenominator() == 0) {
@@ -337,6 +337,9 @@ public class Player implements Runnable {
 	}
 	public boolean isEnded() {
 		return ended;
+	}
+	public synchronized boolean isSeekable() {
+		return (oggReader != null && oggReader.isSeekable());
 	}
 	
 	//Setters
