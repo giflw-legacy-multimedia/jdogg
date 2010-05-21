@@ -19,9 +19,12 @@
 
 package nl.weeaboo.ogg.player;
 
+import nl.weeaboo.ogg.OggInput;
+
 public interface VideoWindowListener {
 
 	public void onPause(boolean p);
 	public void onSeek(double frac);
+	public void onSetInput(OggInput in);
 	
 }

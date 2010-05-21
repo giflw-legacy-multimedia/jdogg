@@ -22,8 +22,20 @@ package nl.weeaboo.ogg.player;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDragEvent;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.dnd.DropTargetEvent;
+import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.swing.ImageIcon;
@@ -33,9 +45,13 @@ import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+
+import nl.weeaboo.ogg.OggInput;
+import nl.weeaboo.ogg.StreamUtil;
 
 @SuppressWarnings("serial")
 public class VideoWindow extends JFrame implements PlayerListener {
@@ -65,6 +81,43 @@ public class VideoWindow extends JFrame implements PlayerListener {
 		setSize(800, 600);
 		setLocationRelativeTo(null);
 		setVisible(true);
+		
+		setDropTarget(new DropTarget(this, new DropTargetListener() {
+			public void dragEnter(DropTargetDragEvent dtde) {
+				if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+					dtde.acceptDrag(DnDConstants.ACTION_COPY);
+				}
+			}
+			public void dragExit(DropTargetEvent dte) {
+			}
+			public void dragOver(DropTargetDragEvent dtde) {
+			}
+			
+			@SuppressWarnings("unchecked")
+			public void drop(DropTargetDropEvent dtde) {				
+				if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+					dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
+
+					Transferable t = dtde.getTransferable();
+					try {
+						List<File> list = (List<File>)t.getTransferData(DataFlavor.javaFileListFlavor);
+						if (list.size() > 0) {
+							setFile(list.get(0));
+							dtde.dropComplete(true);
+							return;
+						}
+					} catch (UnsupportedFlavorException e) {
+						//Ignore
+					} catch (IOException e) {
+						//Ignore
+					} finally {
+						dtde.dropComplete(false);						
+					}
+				}
+			}
+			public void dropActionChanged(DropTargetDragEvent dtde) {
+			}
+		}));
 	}
 	
 	//Functions
@@ -146,32 +199,38 @@ public class VideoWindow extends JFrame implements PlayerListener {
 		
 	//Setters	
 	public void setSubtitles(final String txt) {
-		synchronized (getTreeLock()) {
-			videoPanel.setSubtitles(txt);
-			if (!subsLabel.getText().equals(txt)) {
-				subsLabel.setText(txt);
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				videoPanel.setSubtitles(txt);
+				if (!subsLabel.getText().equals(txt)) {
+					subsLabel.setText(txt);
+				}
 			}
-		}
+		});
 	}
 	
 	@Override
-	public void onTimeChanged(double time, double endTime, double frac) {
-		synchronized (getTreeLock()) {
-			StringBuilder sb = new StringBuilder();
-			sb.append(time(time));
-			if (endTime > 0) {
-				sb.append("/" + time(endTime));
-			}				
-			timeLabel.setText(sb.toString());
-			
-			slider.setEnabled(false);
-			if (!slider.getValueIsAdjusting()) {
-				int p = (int)Math.round(1000000.0 * frac);
-				slider.setMaximum(1000000);
-				slider.setValue(p);
-			}			
-			slider.setEnabled(endTime > 0);
-		}
+	public void onTimeChanged(final double time, final double endTime,
+			final double frac)
+	{
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				StringBuilder sb = new StringBuilder();
+				sb.append(time(time));
+				if (endTime > 0) {
+					sb.append("/" + time(endTime));
+				}				
+				timeLabel.setText(sb.toString());
+				
+				slider.setEnabled(false);
+				if (!slider.getValueIsAdjusting()) {
+					int p = (int)Math.round(1000000.0 * frac);
+					slider.setMaximum(1000000);
+					slider.setValue(p);
+				}			
+				slider.setEnabled(endTime > 0);
+			}
+		});
 	}
 	
 	private String time(double time) {
@@ -195,11 +254,23 @@ public class VideoWindow extends JFrame implements PlayerListener {
 	}
 
 	@Override
-	public void onPauseChanged(boolean p) {
-		synchronized (getTreeLock()) {
-			playPauseButton.setSelected(!p);
-			playPauseButton.setIcon(playPauseButton.isSelected() ? pauseI : playI);
-		}
+	public void onPauseChanged(final boolean p) {
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				playPauseButton.setSelected(!p);
+				playPauseButton.setIcon(playPauseButton.isSelected() ? pauseI : playI);
+			}
+		});
+	}
+	
+	public void setFile(File file) throws IOException {
+		OggInput in = StreamUtil.getOggInput(file);
+
+		synchronized (videoWindowListeners) {
+			for (VideoWindowListener vwl : videoWindowListeners) {
+				vwl.onSetInput(in);
+			}
+		}			
 	}
 	
 }

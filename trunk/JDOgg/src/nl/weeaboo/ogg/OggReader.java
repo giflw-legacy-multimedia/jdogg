@@ -174,12 +174,15 @@ public class OggReader {
 	}
 	
 	public void read() throws IOException {
+		read(false);
+	}
+	public void read(boolean nonBlocking) throws IOException {
 		if (isEOF()) {
 			return;
 		}
 		
 		//Read a page
-		if (pageReader.read(page)) {
+		if (pageReader.read(page, nonBlocking)) {
 			int streamId = page.serialno();
 			OggStream stream = getStream(streamId);
 			if (!stream.isError()) {
@@ -328,6 +331,8 @@ public class OggReader {
 	
 	//Setters
 	public void setInput(OggInput in) throws IOException {
+		streams.clear();
+		
 		input = in;
 		
 		init();

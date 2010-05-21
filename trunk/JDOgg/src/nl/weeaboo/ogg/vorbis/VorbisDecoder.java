@@ -51,7 +51,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	private ByteArrayOutputStream bout;
 	
 	public VorbisDecoder() {
-		super(OggCodec.Vorbis, false);
+		super(OggCodec.Vorbis, true);
 
 		info = new Info();
 		comment = new Comment();

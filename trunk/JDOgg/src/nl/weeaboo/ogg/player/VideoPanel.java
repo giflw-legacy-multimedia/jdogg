@@ -140,16 +140,16 @@ public class VideoPanel extends JPanel implements VideoSink {
 		setPreferredSize(new Dimension(Math.round(width * scale), Math.round(height * scale)));		
 	}
 	
-	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] pixels, int off, int scansize) {
-		this.pixels = pixels;
-		
-		if (imageModel == null) {
-			imageModel = new MemoryImageSource(w, h, pixels, off, scansize);
+	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] p, int off, int scansize) {		
+		if (pixels == null || pixels.length != p.length) {
+			imageModel = new MemoryImageSource(w, h, p, off, scansize);
 			imageModel.setAnimated(true);
 			image = Toolkit.getDefaultToolkit().createImage(imageModel);
 		} else {
-			imageModel.newPixels(pixels, model, off, scansize);
+			imageModel.newPixels(p, model, off, scansize);
 		}
+
+		pixels = p;
 	}
 	
 	public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {
