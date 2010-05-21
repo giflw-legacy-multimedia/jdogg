@@ -19,6 +19,7 @@
 
 package nl.weeaboo.ogg.player;
 
+import java.io.File;
 import java.io.IOException;
 
 import javax.sound.sampled.AudioFormat;
@@ -77,13 +78,13 @@ public class Player implements Runnable {
 			e.printStackTrace();
 		}
 
-		VideoWindow window = new VideoWindow("Theora/Vorbis/Kate Player");
+		VideoWindow window = new VideoWindow("Theora/Vorbis Player");
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		
 		final Player player = new Player(window, window.getVideoPanel());
-		//player.setInput(StreamUtil.getOggInput(new File(args[0])));
+		player.setInput(StreamUtil.getOggInput(new File(args[0])));
 		//player.setInput(StreamUtil.getOggInput("http://jvn.x10hosting.com/jdogg/small.ogv"));
-		player.setInput(StreamUtil.getOggInput("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
+		//player.setInput(StreamUtil.getOggInput("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
 		player.start();		
 
 		window.addVideoWindowListener(new VideoWindowListener() {
@@ -93,34 +94,50 @@ public class Player implements Runnable {
 			public void onSeek(double frac) {
 				player.seek(frac);
 			}
+			public void onSetInput(OggInput in) {
+				try {
+					player.setInput(in);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
 		});
 	}
 	
-	public synchronized void start() {
+	public void start() {
 		stop();
 		
-		stop = false;
-		ended = false;
-		seekRequest = -1;
-		
-		if (!inputOk) {
-			throw new RuntimeException("Player input not set");
-		}
-		
-		thread = new Thread(this);
-		thread.start();
-	}
-	public void stop() {
-		stop = true;
-		
-		if (thread != null) {
-			try {
-				thread.interrupt();
-				thread.join();
-			} catch (InterruptedException ie) {
-				//Ignore
+		synchronized (this) {
+			stop = false;
+			pauseState = false;
+			ended = false;		
+			seekRequest = -1;
+			
+			if (!inputOk) {
+				throw new RuntimeException("Player input not set");
 			}
+			
+			thread = new Thread(this);
+			thread.start();
+		}
+	}
+	
+	public void stop() {
+		stop = true;		
+		Thread t = null;
+		
+		synchronized (this) {
+			t = thread;
 			thread = null;
+		}
+
+		if (t != null) {
+			t.interrupt();
+			try {
+				t.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -130,6 +147,7 @@ public class Player implements Runnable {
 		if (vorbisd == null) {
 			return;
 		}
+		
 		AudioFormat format = vorbisd.getAudioFormat();
 		if (format == null) {
 			return;
@@ -164,7 +182,12 @@ public class Player implements Runnable {
 						
 			double targetTime = -1;
 			long lastTime = System.nanoTime();		
-			while (!stop) {				
+			while (!stop) {
+				//Buffer data? We should probably limit the amount of data buffered.
+				//if (!oggReader.isEOF()) {
+				//	oggReader.read(true);
+				//}
+				
 				//Process Theora
 				while (targetTime < 0 || targetTime >= theorad.getTime()) {
 					while (!oggReader.isEOF() && !theorad.available()) {
@@ -222,12 +245,14 @@ public class Player implements Runnable {
 					double dt = (curTime - lastTime) / 1000000000.0;
 					
 					//Sync audio
-					double atime = asink.getTime();
-					double adiff = targetTime - atime;
-					if (asink != null && atime >= 0 && Math.abs(adiff) > audioSync
-							&& asink.getBufferLength() > 0)
-					{
-						targetTime -= adiff * Math.min(1.0, 10 * dt);
+					if (asink != null) {
+						double atime = asink.getTime();
+						double adiff = targetTime - atime;
+						if (atime >= 0 && Math.abs(adiff) > audioSync
+								&& asink.getBufferLength() > 0)
+						{
+							targetTime -= adiff * Math.min(1.0, 10 * dt);
+						}
 					}
 					
 					targetTime += dt;
@@ -299,6 +324,7 @@ public class Player implements Runnable {
 			re.printStackTrace();
 		} finally {
 			stopAudio();
+			stop = true;
 		}
 	}
 		
@@ -343,18 +369,29 @@ public class Player implements Runnable {
 	}
 	
 	//Setters
-	public synchronized void setInput(OggInput in) throws IOException {
-		oggReader.setInput(in);
-				
-		//Setup stream handlers
-		oggReader.addStreamHandler(theorad = new TheoraDecoder());
-		oggReader.addStreamHandler(vorbisd = new VorbisDecoder());
-		//oggReader.addStreamHandler(kated = new KateDecoder());
-
-		//Read headers
-		oggReader.readStreamHeaders();
+	public void setInput(OggInput in) throws IOException {
+		boolean wasStarted = !stop;
 		
-		inputOk = true;
+		stop();
+		
+		synchronized (this) {
+			inputOk = false;			
+			oggReader.setInput(in);
+						
+			//Setup stream handlers
+			oggReader.addStreamHandler(theorad = new TheoraDecoder());
+			oggReader.addStreamHandler(vorbisd = new VorbisDecoder());
+			//oggReader.addStreamHandler(kated = new KateDecoder());
+			
+			//Read headers
+			oggReader.readStreamHeaders();
+			
+			inputOk = true;
+			
+			if (wasStarted) {
+				start();
+			}
+		}
 	}
 	
 	public synchronized void setPaused(boolean p) {

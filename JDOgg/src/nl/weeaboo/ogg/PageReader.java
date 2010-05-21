@@ -49,10 +49,15 @@ public class PageReader {
 		eof = false;
 	}
 	
-	protected void readFromInput() throws IOException {
-		//Read some data
+	protected void readFromInput(boolean nonBlocking) throws IOException {
 		int off = syncState.buffer(readBufSize);
-		int r = inputStream.read(syncState.data, off, readBufSize);		
+		int maxRead = readBufSize;
+		if (nonBlocking) {
+			maxRead = Math.min(inputStream.available(), maxRead);
+		}
+		
+		//Read some data
+		int r = inputStream.read(syncState.data, off, maxRead);		
 		if (r < 0) {
 			eof = true;
 			return;
@@ -62,7 +67,7 @@ public class PageReader {
 		syncState.wrote(r);		
 	}
 	
-	public boolean read(Page page) throws IOException {
+	public boolean read(Page page, boolean nonBlocking) throws IOException {
 		while (!isEOF()) {
 			int res = syncState.pageseek(page);				
 			if (res < 0) {
@@ -74,7 +79,7 @@ public class PageReader {
 				}
 			} else if (res == 0) {
 				//Needs more data
-				readFromInput();
+				readFromInput(nonBlocking);
 			} else {
 				//Page read
 				seek = 0;
