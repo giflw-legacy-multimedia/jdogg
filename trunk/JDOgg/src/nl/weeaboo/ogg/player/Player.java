@@ -40,7 +40,7 @@ public class Player implements Runnable {
 
 	private final double audioSync = 0.1;
 
-	private Thread thread;
+	private volatile Thread thread;
 	private volatile boolean stop;
 	private volatile boolean pauseState;
 	private volatile boolean pauseRequest;
@@ -124,21 +124,17 @@ public class Player implements Runnable {
 	
 	public void stop() {
 		stop = true;		
-		Thread t = null;
 		
-		synchronized (this) {
-			t = thread;
-			thread = null;
-		}
+		final Thread t = thread;
 
 		if (t != null) {
-			t.interrupt();
-			try {
-				t.join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+			while (t.isAlive()) {
+				t.interrupt();
+				sleep(0.01);
 			}
 		}
+		
+		thread = null;
 	}
 	
 	protected void startAudio() {
@@ -297,7 +293,7 @@ public class Player implements Runnable {
 					}
 					
 					//Fuck Yeah Seeking
-					if (seekRequest >= 0) {
+					if (seekRequest >= 0 && oggReader.isSeekable()) {
 						//if (!oggReader.isSeekSlow()) {
 							oggReader.seekExact((theorad != null ? theorad : vorbisd),
 									seekRequest);
