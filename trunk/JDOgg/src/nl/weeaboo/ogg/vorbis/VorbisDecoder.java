@@ -21,6 +21,7 @@ package nl.weeaboo.ogg.vorbis;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 import javax.sound.sampled.AudioFormat;
 
@@ -154,6 +155,14 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	
 	@Override
 	public byte[] read() throws IOException {
+		return read((int)(bufferEndFrame - bufferStartFrame));
+	}
+	
+	public byte[] read(int frames) throws OggException {
+		if (frames > bufferEndFrame - bufferStartFrame) {
+			throw new IllegalArgumentException(String.format("Can't read %d frames, only %d buffered.", frames, bufferEndFrame-bufferStartFrame));
+		}
+		
 		if (!hasReadHeaders()) {
 			throw new OggException("Haven't read headers yet");
 		}
@@ -165,9 +174,17 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		
 		byte result[] = bout.toByteArray();
 		bout.reset();		
-		
-		bufferStartFrame = bufferEndFrame;
-		return result;
+
+		int frameSize = getFrameSize();
+		int offset = frames * frameSize;
+		if (offset <= 0 || offset >= result.length) {
+			bufferStartFrame = bufferEndFrame;
+			return result;
+		} else {			
+			bufferStartFrame += frames;
+			bout.write(result, offset, result.length - offset);
+			return Arrays.copyOf(result, offset);
+		}
 	}
 
 	@Override
@@ -246,6 +263,9 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 			return audioFormat.getSampleSizeInBits();
 		}
 		return 16;
+	}
+	public int getFramesBuffered() {
+		return (int)(bufferEndFrame - bufferStartFrame);
 	}
 	
 	//Setters

@@ -33,7 +33,6 @@ public class AudioSink {
 	private AudioFormat format;
 	private float bytesPerSecond;
 	private int bytesPerFrame;
-	private float lineBufferDuration = 0.25f;
 	
 	private byte buffer[];
 	private int bufferLength;
@@ -51,6 +50,11 @@ public class AudioSink {
 	
 	//Functions
 	public synchronized void start() throws LineUnavailableException, InterruptedException {
+		start(10, .25f);
+	}
+	public synchronized void start(final long sleepTime, final double lineBufferDuration)
+		throws LineUnavailableException, InterruptedException
+	{	
 		stop();
 
 		bufferEndTime = 0;		
@@ -61,7 +65,7 @@ public class AudioSink {
 			return;
 		}
 
-		line.open(format, Math.round(bytesPerSecond * lineBufferDuration));
+		line.open(format, (int)Math.round(bytesPerSecond * lineBufferDuration));
 		line.start();
 		
 		stop = false;
@@ -71,7 +75,7 @@ public class AudioSink {
 					flush();
 					
 					try {
-						Thread.sleep(10);
+						Thread.sleep(sleepTime);
 					} catch (InterruptedException ie) {						
 					}
 				}
