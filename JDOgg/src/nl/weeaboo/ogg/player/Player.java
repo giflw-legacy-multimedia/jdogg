@@ -47,6 +47,7 @@ public class Player implements Runnable {
 	private volatile double seekRequest;
 	private volatile boolean ended;
 	private boolean inputOk;
+	private double volume;
 	
 	private PlayerListener control;
 	private VideoSink vsink;
@@ -61,6 +62,7 @@ public class Player implements Runnable {
 	public Player(PlayerListener control, VideoSink vsink) {				
 		this.control = control;
 		this.vsink = vsink;
+		this.volume = 1.0;
 		
 		oggReader = new OggReader();
 	}
@@ -128,9 +130,13 @@ public class Player implements Runnable {
 		final Thread t = thread;
 
 		if (t != null) {
-			while (t.isAlive()) {
-				t.interrupt();
-				sleep(0.01);
+			synchronized (this) {
+				notifyAll();
+			}
+			
+			try {
+				t.join(1000);
+			} catch (InterruptedException e) {
 			}
 		}
 		
@@ -278,7 +284,7 @@ public class Player implements Runnable {
 						control.onPauseChanged(pauseState);
 						if (asink != null) asink.reset();
 						
-						notify();						
+						notifyAll();
 						try {
 							wait();
 						} catch (InterruptedException ie) {
@@ -339,16 +345,19 @@ public class Player implements Runnable {
 	public synchronized int getWidth() {
 		if (theorad == null) return 0;
 		VideoFormat fmt = theorad.getVideoFormat();
+		if (fmt == null) return 0;
 		return fmt.getWidth();
 	}
 	public synchronized int getHeight() {
 		if (theorad == null) return 0;
 		VideoFormat fmt = theorad.getVideoFormat();
+		if (fmt == null) return 0;
 		return fmt.getHeight();
 	}
 	public synchronized double getFPS() {
 		if (theorad == null) return 30;
 		VideoFormat fmt = theorad.getVideoFormat();
+		if (fmt == null) return 30;
 		if (fmt.getFPSDenominator() == 0) {
 			return 30;
 		}
@@ -362,6 +371,9 @@ public class Player implements Runnable {
 	}
 	public synchronized boolean isSeekable() {
 		return (oggReader != null && oggReader.isSeekable());
+	}
+	public double getVolume() {
+		return volume;
 	}
 	
 	//Setters
@@ -405,6 +417,13 @@ public class Player implements Runnable {
 			} catch (InterruptedException ie) {
 			}
 		} while(pauseState != p);
+	}
+	
+	public synchronized void setVolume(double v) {
+		if (Math.abs(volume-v) >= 0.0001) {
+			volume = v;
+			asink.setVolume(v);
+		}
 	}
 
 }

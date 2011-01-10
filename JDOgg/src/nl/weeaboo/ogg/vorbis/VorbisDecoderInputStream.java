@@ -53,7 +53,7 @@ public class VorbisDecoderInputStream extends InputStream {
 		}
 		return (buf.get() & 0xFF);
 	}
-    
+	
 	//Getters
 	
 	//Setters

@@ -22,6 +22,7 @@ package nl.weeaboo.ogg.player;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
+import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
@@ -181,4 +182,25 @@ public class AudioSink {
 	}
 	
 	//Setters
+	public synchronized void setVolume(double vol) {
+		if (line != null && line.isOpen()) {
+			try {
+				FloatControl volumeControl = (FloatControl)line.getControl(FloatControl.Type.MASTER_GAIN);
+				if (vol == 0) {
+					volumeControl.setValue(volumeControl.getMinimum());
+				} else {					
+					double minimum = volumeControl.getMinimum();
+					double maximum = volumeControl.getMaximum();
+					double xMin = Math.pow(10, (minimum + (maximum-minimum)/5.0) / 10.0); //Skip the lowest 20% because the music starts sounding like crap
+					double xMax = Math.pow(10, maximum / 10.0);
+					double db = 10.0 * Math.log10(xMin + (vol * vol) * (xMax-xMin));
+		
+					volumeControl.setValue((float)db);
+				}
+			} catch (IllegalArgumentException iae) {
+				throw new RuntimeException(iae);
+			}
+		}
+	}
+	
 }
