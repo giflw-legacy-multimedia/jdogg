@@ -24,8 +24,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Locale;
-import java.util.Scanner;
 
 public class URLInput implements RandomOggInput {
 
@@ -78,7 +76,7 @@ public class URLInput implements RandomOggInput {
 		urlcon.setRequestProperty("Connection", "Keep-Alive");
 		String rangeS = "";
 		if (off > 0) rangeS += "bytes=" + off + "-";
-		if (len >= 0 && off+len < length) rangeS += len;
+		if (len > 0 && off+len < length) rangeS += (len - 1);
 		if (rangeS.length() > 0) {
 			urlcon.setRequestProperty("Range", rangeS);
 		}
@@ -91,19 +89,16 @@ public class URLInput implements RandomOggInput {
 		rangeS = urlcon.getHeaderField("Content-Range");
 		long responseOff = 0;
 		long responseEnd = -1;
-		if (rangeS != null) {
-			Scanner scanner = new Scanner(rangeS);
-			scanner.useLocale(Locale.ROOT);
-			scanner.skip("bytes\\s*");
-			if (scanner.hasNextInt()) {
-				responseOff = Math.max(0, scanner.nextInt());
-				scanner.skip("\\s*-\\s*");
-				if (scanner.hasNextInt()) {
-					responseEnd = scanner.nextInt();
-				}
-			}
-		}
-
+        if (rangeS != null) {
+            int start = rangeS.indexOf(' ') + 1;
+            int end = rangeS.indexOf('-', start);
+            String offS = rangeS.substring(start, end).trim();
+            responseOff = Long.parseLong(offS);
+            start = end+1;
+            end = rangeS.indexOf('/', start);
+            String lenS = rangeS.substring(start, end).trim();
+            responseEnd = 1 + Long.parseLong(lenS); //HTTP Ranges are inclusive, mine is exclusive -- hence the +1
+        }
 
 		while (responseOff < off && responseOff <= responseEnd) {
 			long s = in.skip(off - responseOff);
