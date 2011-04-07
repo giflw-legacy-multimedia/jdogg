@@ -19,12 +19,10 @@
 
 package nl.weeaboo.ogg.player;
 
-import java.awt.image.ImageConsumer;
+import nl.weeaboo.ogg.theora.VideoFrame;
 
-public interface VideoSink extends ImageConsumer {
+public interface VideoSink {
 
-	public int[] get();
-	public int getImageWidth();
-	public int getImageHeight();
+	public void display(VideoFrame videoFrame);
 	
 }

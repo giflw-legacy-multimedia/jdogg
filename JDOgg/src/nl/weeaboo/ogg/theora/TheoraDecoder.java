@@ -52,7 +52,7 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 		info = new Info();
 		comment = new Comment();
 		state = new State();
-		
+
 		frames = new ArrayDeque<VideoFrame>();
 		bufferStartTime = bufferEndTime = -1;
 	}
@@ -61,7 +61,7 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 	@Override
 	public void clearBuffer() {
 		packets.clear();
-		frames.clear();		
+		frames.clear();
 
 		bufferStartTime = bufferEndTime;
 	}	
@@ -102,17 +102,23 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 			return;
 		}
 		
-		if (frames.size() >= 1) {
-			//Our old yuv buffer is still in use.
-			yuvBuffer = new YUVBuffer();
+		int w, h;
+		//int w = videoFormat.getWidth(), h = videoFormat.getHeight();
+		synchronized (yuvBuffer) {
+			if (state.decodeYUVout(yuvBuffer) != 0) {
+				throw new OggException("Error decoding YUV from Theora packet");
+			}
+			w = yuvBuffer.y_width;
+			h = yuvBuffer.y_height;
 		}
 		
-		if (state.decodeYUVout(yuvBuffer) != 0) {
-			throw new OggException("Error decoding YUV from Theora packet");
-		}
+		//We don't buffer video frames (too heavy on the garbage collector)
+		/*if (frames.size() > 0) {
+			System.out.println("Skipping " + frames.size() + " frames");
+		}*/		
+		frames.clear();
+		bufferStartTime = bufferEndTime;
 		
-		int w = videoFormat.getWidth();
-		int h = videoFormat.getHeight();
 		double frameDuration = videoFormat.getFrameDuration();
 		frames.add(new VideoFrame(yuvBuffer, w, h, bufferEndTime - frameDuration,
 				frameDuration));

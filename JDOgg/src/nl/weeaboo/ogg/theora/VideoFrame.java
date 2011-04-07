@@ -2,7 +2,6 @@ package nl.weeaboo.ogg.theora;
 
 import java.awt.image.ColorModel;
 import java.awt.image.ImageConsumer;
-import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Hashtable;
 
@@ -10,63 +9,68 @@ import com.fluendo.jheora.YUVBuffer;
 
 public class VideoFrame {
 
-	YUVBuffer yuvBuffer;
+	private YUVBuffer yuvBuffer;
+	private IntBuffer rgb;
 	
-	private int width;
-	private int height;
-	private double startTime;
-	private double duration;
+	private final int width;
+	private final int height;
+	private final double startTime;
+	private final double duration;
 	
-	private IntBuffer argb;
-	
-	public VideoFrame(YUVBuffer buf, int w, int h, double startTime, double duration) {
-		yuvBuffer = buf;
-		yuvBuffer.data = yuvBuffer.data.clone();
-		
+	public VideoFrame(YUVBuffer buf, int w, int h, double start, double dur) {
 		width = w;
 		height = h;
+		yuvBuffer = buf;
+		startTime = start;
+		duration = dur;
 		
-		this.startTime = startTime;
-		this.duration = duration;
+		/*
+		synchronized (buf) {
+			yuvBuffer = new YUVBuffer();
+			yuvBuffer.data = buf.data.clone();
+			yuvBuffer.u_offset = buf.u_offset;
+			yuvBuffer.uv_height = buf.uv_height;
+			yuvBuffer.uv_stride = buf.uv_stride;
+			yuvBuffer.uv_width = buf.uv_width;
+			yuvBuffer.v_offset = buf.v_offset;
+			yuvBuffer.y_height = buf.y_height;
+			yuvBuffer.y_offset = buf.y_offset;
+			yuvBuffer.y_stride = buf.y_stride;
+			yuvBuffer.y_width = buf.y_width;
+		}
+		*/				
 	}
 	
 	//Functions	
-	public IntBuffer readPixels() {
-		return readPixels(null);
-	}
-	public IntBuffer readPixels(final ImageConsumer ic) {
-		ImageConsumer consumer = new ImageConsumer() {
-			public void setColorModel(ColorModel model) {
-				if (ic != null) ic.setColorModel(model);
-			}
-			public void setDimensions(int width, int height) {
-				if (ic != null) ic.setDimensions(width, height);
-			}
-			public void setHints(int hintflags) {
-				if (ic != null) ic.setHints(hintflags);
-			}
-			public void setProperties(Hashtable<?, ?> props) {
-				if (ic != null) ic.setProperties(props);
-			}			
-			public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {
-				if (ic != null) ic.setPixels(x, y, w, h, model, pixels, off, scansize);
-				argb = ByteBuffer.wrap(pixels).asIntBuffer();
-			}			
-			public void setPixels(int x, int y, int w, int h, ColorModel model, int[] pixels, int off, int scansize) {
-				if (ic != null) ic.setPixels(x, y, w, h, model, pixels, off, scansize);
-				argb = IntBuffer.wrap(pixels);
-			}
-			public void imageComplete(int status) {
-				if (ic != null) ic.imageComplete(status);
-			}
-		};
-		
-		yuvBuffer.startProduction(consumer);
-		
-		return argb;
-	}
 	
 	//Getters
+	public YUVBuffer getYUV() {
+		return yuvBuffer;
+	}
+	public IntBuffer getRGB() {
+		if (rgb == null) {
+			synchronized (yuvBuffer) {
+				yuvBuffer.startProduction(new ImageConsumer() {
+					public void setDimensions(int width, int height) {
+					}
+					public void setProperties(Hashtable<?, ?> props) {
+					}
+					public void setColorModel(ColorModel model) {
+					}
+					public void setHints(int hintflags) {
+					}
+					public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {
+					}
+					public void setPixels(int x, int y, int w, int h, ColorModel model, int[] pixels, int off, int scansize) {
+						rgb = IntBuffer.wrap(pixels, off, scansize * (h-1) + w);
+					}
+					public void imageComplete(int status) {
+					}
+				});
+			}
+		}
+		return rgb;
+	}
 	public int getWidth() {
 		return width;
 	}
