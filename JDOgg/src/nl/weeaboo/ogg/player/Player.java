@@ -91,10 +91,11 @@ public class Player implements Runnable {
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		
 		final Player player = new Player(window, window.getVideoPanel());
-		player.setInput(StreamUtil.getOggInput(new File(args[0])));
-		//player.setInput(StreamUtil.getOggInput("http://jvn.x10hosting.com/jdogg/small.ogv"));
-		//player.setInput(StreamUtil.getOggInput("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
-		player.start();		
+		if (args.length >= 1) {
+			player.setInput(StreamUtil.getOggInput(new File(args[0])));
+			//player.setInput(StreamUtil.getOggInput("http://upload.wikimedia.org/wikipedia/commons/b/b5/I-15bis.ogg"));		
+			player.start();
+		}
 
 		window.addVideoWindowListener(new VideoWindowListener() {
 			public void onPause(boolean p) {
