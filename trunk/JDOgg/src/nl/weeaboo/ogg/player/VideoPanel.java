@@ -29,6 +29,7 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.image.ColorModel;
+import java.awt.image.ImageConsumer;
 import java.awt.image.MemoryImageSource;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
@@ -36,8 +37,10 @@ import java.util.Hashtable;
 
 import javax.swing.JPanel;
 
+import nl.weeaboo.ogg.theora.VideoFrame;
+
 @SuppressWarnings("serial")
-public class VideoPanel extends JPanel implements VideoSink {
+public class VideoPanel extends JPanel implements VideoSink, ImageConsumer {
 
 	private Image image;
 	private MemoryImageSource imageModel;
@@ -55,6 +58,18 @@ public class VideoPanel extends JPanel implements VideoSink {
 	}
 	
 	//Functions
+	@Override
+	public void display(VideoFrame videoFrame) {
+		int w = videoFrame.getWidth();
+		int h = videoFrame.getHeight();
+		setDimensions(w, h);
+		
+		IntBuffer rgb = videoFrame.getRGB();
+		setPixels(0, 0, w, h, ColorModel.getRGBdefault(),
+				rgb.array(), rgb.arrayOffset(), w);				
+	}
+
+	@Override
 	protected void paintComponent(Graphics graphics) {
 		super.paintComponent(graphics);
 
@@ -130,6 +145,10 @@ public class VideoPanel extends JPanel implements VideoSink {
 	
 	//Setters
 	public void setDimensions(int width, int height) {
+		if (size != null && size.width == width && size.height == height) {
+			return;
+		}
+		
 		size = new Dimension(width, height);
 		
 		Dimension ss = Toolkit.getDefaultToolkit().getScreenSize();
@@ -140,7 +159,7 @@ public class VideoPanel extends JPanel implements VideoSink {
 		setPreferredSize(new Dimension(Math.round(width * scale), Math.round(height * scale)));		
 	}
 	
-	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] p, int off, int scansize) {		
+	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] p, int off, int scansize) {
 		if (pixels == null || pixels.length != p.length) {
 			imageModel = new MemoryImageSource(w, h, p, off, scansize);
 			imageModel.setAnimated(true);
@@ -150,6 +169,8 @@ public class VideoPanel extends JPanel implements VideoSink {
 		}
 
 		pixels = p;
+		
+		repaint();
 	}
 	
 	public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {

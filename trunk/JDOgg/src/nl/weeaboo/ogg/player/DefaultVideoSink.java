@@ -20,28 +20,30 @@
 package nl.weeaboo.ogg.player;
 
 import java.awt.Dimension;
-import java.awt.image.ColorModel;
-import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.util.Hashtable;
 import java.util.concurrent.atomic.AtomicReference;
+
+import nl.weeaboo.ogg.theora.VideoFrame;
 
 public class DefaultVideoSink implements VideoSink {
 
-	private AtomicReference<int[]> pixels;
-	private Dimension size;
+	private final AtomicReference<IntBuffer> pixels;
+	private final Dimension size;
 	
 	public DefaultVideoSink() {
-		pixels = new AtomicReference<int[]>();
+		pixels = new AtomicReference<IntBuffer>();
 		size = new Dimension();
 	}
 	
 	//Functions	
-	public void imageComplete(int status) {
-	}
+	@Override
+	public void display(VideoFrame videoFrame) {
+		size.setSize(videoFrame.getWidth(), videoFrame.getHeight());
+		pixels.set(videoFrame.getRGB());
+	}			
 	
 	//Getters
-	public int[] get() {		
+	public IntBuffer get() {		
 		return pixels.getAndSet(null);
 	}
 	public int getImageWidth() {
@@ -52,31 +54,5 @@ public class DefaultVideoSink implements VideoSink {
 	}
 	
 	//Setters
-	public void setDimensions(int width, int height) {
-		size = new Dimension(width, height);
-	}
-	
-	public void setPixels(int x, int y, int w, int h, ColorModel model, int[] argb, int off, int scansize) {
-		pixels.set(argb);
-	}
-	
-	public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {
-		IntBuffer intbuf = ByteBuffer.wrap(pixels).asIntBuffer();
-		int[] argb = new int[intbuf.remaining()];
-		for (int n = 0; n < argb.length; n++) {
-			argb[n] = intbuf.get();
-		}
-		setPixels(x, y, w, h, model, argb, off, scansize);
-	}
-	
-	public void setColorModel(ColorModel model) {
-	}
-	
-	public void setHints(int hintflags) {
-	}
-	
-	public void setProperties(Hashtable<?, ?> props) {				
-	}			
-		
 
 }

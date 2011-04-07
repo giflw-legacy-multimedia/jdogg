@@ -19,6 +19,8 @@
 
 package nl.weeaboo.ogg.player;
 
+import java.util.concurrent.ThreadFactory;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -34,6 +36,7 @@ public class AudioSink {
 	private AudioFormat format;
 	private float bytesPerSecond;
 	private int bytesPerFrame;
+	private ThreadFactory threadFactory;
 	
 	private byte buffer[];
 	private int bufferLength;
@@ -41,10 +44,11 @@ public class AudioSink {
 	private long written;
 	private double bufferEndTime;
 	
-	public AudioSink(AudioFormat fmt) {
+	public AudioSink(AudioFormat fmt, ThreadFactory tfac) {
 		format = fmt;
 		bytesPerFrame = format.getFrameSize();
 		bytesPerSecond = bytesPerFrame * format.getFrameRate();
+		threadFactory = tfac;
 		
 		buffer = new byte[8192];
 	}
@@ -70,7 +74,7 @@ public class AudioSink {
 		line.start();
 		
 		stop = false;
-		thread = new Thread(new Runnable() {
+		thread = threadFactory.newThread(new Runnable() {
 			public void run() {
 				while (!stop) {
 					flush();

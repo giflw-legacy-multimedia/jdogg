@@ -66,6 +66,9 @@ public class VideoWindow extends JFrame implements PlayerListener {
 	
 	private ImageIcon playI, pauseI;
 	
+	private double time, endTime, frac;
+	private Runnable onTimeChangedEvent;
+	
 	public VideoWindow(String title) {
 		videoWindowListeners = new CopyOnWriteArrayList<VideoWindowListener>();
 				
@@ -118,6 +121,26 @@ public class VideoWindow extends JFrame implements PlayerListener {
 			public void dropActionChanged(DropTargetDragEvent dtde) {
 			}
 		}));
+		
+		onTimeChangedEvent = new Runnable() {
+			@Override
+			public void run() {
+				StringBuilder sb = new StringBuilder();
+				sb.append(time(time));
+				if (endTime > 0) {
+					sb.append("/" + time(endTime));
+				}
+				timeLabel.setText(sb.toString());
+				
+				slider.setEnabled(false);
+				if (!slider.getValueIsAdjusting()) {
+					int p = (int)Math.round(1000000.0 * frac);
+					slider.setMaximum(1000000);
+					slider.setValue(p);
+				}
+				slider.setEnabled(endTime > 0);
+			}			
+		};
 	}
 	
 	//Functions
@@ -208,29 +231,31 @@ public class VideoWindow extends JFrame implements PlayerListener {
 			}
 		});
 	}
+
+	int timeChanged = 0;
 	
 	@Override
 	public void onTimeChanged(final double time, final double endTime,
 			final double frac)
 	{
-		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
-				StringBuilder sb = new StringBuilder();
-				sb.append(time(time));
-				if (endTime > 0) {
-					sb.append("/" + time(endTime));
-				}				
-				timeLabel.setText(sb.toString());
-				
-				slider.setEnabled(false);
-				if (!slider.getValueIsAdjusting()) {
-					int p = (int)Math.round(1000000.0 * frac);
-					slider.setMaximum(1000000);
-					slider.setValue(p);
-				}			
-				slider.setEnabled(endTime > 0);
-			}
-		});
+		boolean changed = false;
+		
+		if (Math.abs(this.time - time) > 0.1) {
+			this.time = time;
+			changed = true;
+		}
+		if (Math.abs(this.endTime - endTime) > 0.1) {
+			this.endTime = endTime;
+			changed = true;
+		}
+		if (Math.abs(this.frac - frac) > 0.001) {
+			this.frac = frac;
+			changed = true;
+		}
+		
+		if (changed) {
+			SwingUtilities.invokeLater(onTimeChangedEvent);
+		}
 	}
 	
 	private String time(double time) {

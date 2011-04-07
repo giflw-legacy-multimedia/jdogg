@@ -21,6 +21,8 @@ package nl.weeaboo.ogg.player;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.LineUnavailableException;
@@ -49,6 +51,7 @@ public class Player implements Runnable {
 	private boolean inputOk;
 	private double volume;
 	
+	private ThreadFactory threadFactory;
 	private PlayerListener control;
 	private VideoSink vsink;
 	private AudioSink asink;
@@ -59,9 +62,13 @@ public class Player implements Runnable {
 	private VorbisDecoder vorbisd;
 	//private KateDecoder kated;
 		
-	public Player(PlayerListener control, VideoSink vsink) {				
+	public Player(PlayerListener control, VideoSink vsink) {
+		this(control, vsink, Executors.defaultThreadFactory());
+	}
+	public Player(PlayerListener control, VideoSink vsink, ThreadFactory tfac) {				
 		this.control = control;
 		this.vsink = vsink;
+		this.threadFactory = tfac;
 		this.volume = 1.0;
 		
 		oggReader = new OggReader();
@@ -119,7 +126,7 @@ public class Player implements Runnable {
 				throw new RuntimeException("Player input not set");
 			}
 			
-			thread = new Thread(this);
+			thread = threadFactory.newThread(this);
 			thread.start();
 		}
 	}
@@ -155,7 +162,7 @@ public class Player implements Runnable {
 			return;
 		}
 		
-		asink = new AudioSink(format);
+		asink = new AudioSink(format, threadFactory);
 		try {
 			asink.start();
 		} catch (LineUnavailableException lue) {
@@ -184,12 +191,7 @@ public class Player implements Runnable {
 						
 			double targetTime = -1;
 			long lastTime = System.nanoTime();		
-			while (!stop) {
-				//Buffer data? We should probably limit the amount of data buffered.
-				//if (!oggReader.isEOF()) {
-				//	oggReader.read(true);
-				//}
-				
+			while (!stop) {				
 				//Process Theora
 				while (targetTime < 0 || targetTime >= theorad.getTime()) {
 					while (!oggReader.isEOF() && !theorad.available()) {
@@ -210,16 +212,16 @@ public class Player implements Runnable {
 					
 					VideoFrame frame = theorad.read();
 					if (frame == null) continue;
-					frame.readPixels(vsink);					
-					if (targetTime < 0) break;
-				}
+					vsink.display(frame);
+					if (targetTime < 0) break;					
+				}				
 				
 				if (targetTime < 0) {
 					targetTime = theorad.getTime();
 					vorbisd.clearBuffer();
 					if (asink != null) asink.reset();
 				}
-				
+								
 				//System.out.printf("T=%.2f V=%.2f A=%.2f DIFF=%.2f\n", targetTime, theorad.getTime(), asink.getTime(), theorad.getTime() - asink.getTime());			
 				
 				//Process Vorbis
@@ -260,11 +262,12 @@ public class Player implements Runnable {
 					targetTime += dt;
 				}
 				lastTime = curTime;
-
+				
 				//Limit time
 				double vwait = theorad.getTime() - targetTime;
-				double await = (asink != null ? asink.getBufferDuration() : 0);
+				double await = (asink != null ? asink.getBufferDuration() : vwait);
 				double w = Math.min(vwait, await);
+				
 				if (w >= 0.001) {
 					sleep(w);
 				}
@@ -272,6 +275,7 @@ public class Player implements Runnable {
 				//Go sleep for a bit if there's nothing more to do
 				ended = oggReader.isEOF() && !theorad.available()
 					&& !vorbisd.available();
+				
 				if (ended) {
 					pauseRequest = true;
 					sleep(0.1);
