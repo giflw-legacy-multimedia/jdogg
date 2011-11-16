@@ -306,10 +306,9 @@ public class Player implements Runnable {
 					//Fuck Yeah Seeking
 					if (seekRequest >= 0 && oggReader.isSeekable()) {
 						//if (!oggReader.isSeekSlow()) {
-							oggReader.seekExact((theorad != null ? theorad : vorbisd),
-									seekRequest);
+							oggReader.seekExactFrac((theorad != null ? theorad : vorbisd), seekRequest);
 						//} else {
-						//	oggReader.seekApprox(seekRequest);
+						//	oggReader.seekApproxFrac(seekRequest);
 						//}
 						lastTime = System.nanoTime();
 						

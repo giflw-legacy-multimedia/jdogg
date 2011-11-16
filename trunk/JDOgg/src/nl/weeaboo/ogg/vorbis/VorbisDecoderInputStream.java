@@ -35,7 +35,8 @@ public class VorbisDecoderInputStream extends InputStream {
 		oggReader = oggd;
 		vorbisDecoder = vorbisd;
 		
-		buf = ByteBuffer.allocate(0);
+		buf = ByteBuffer.allocate(8<<1024);
+		buf.limit(0);
 	}
 	
 	//Functions
@@ -49,12 +50,30 @@ public class VorbisDecoderInputStream extends InputStream {
 				return -1;
 			}		
 			
-			buf = ByteBuffer.wrap(vorbisDecoder.read());
+			byte[] read = vorbisDecoder.read();
+			if (buf.hasArray() && buf.capacity() >= read.length) {
+				buf.rewind();
+				buf.limit(read.length);
+				System.arraycopy(read, 0, buf.array(), buf.arrayOffset(), read.length);
+			} else {
+				buf = ByteBuffer.wrap(read);
+			}
 		}
+		
 		return (buf.get() & 0xFF);
 	}
 	
+	public void seekTo(double time) throws IOException {
+		oggReader.seekExactTime(vorbisDecoder, time);
+	}
+	
 	//Getters
+	public double getTime() {
+		return vorbisDecoder.getTime();
+	}
+	public double getEndTime() {
+		return vorbisDecoder.getEndTime();
+	}
 	
 	//Setters
 	

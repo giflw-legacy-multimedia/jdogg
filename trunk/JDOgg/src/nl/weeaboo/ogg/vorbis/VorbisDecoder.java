@@ -155,7 +155,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	
 	@Override
 	public byte[] read() throws IOException {
-		return read((int)(bufferEndFrame - bufferStartFrame));
+		return read((int)Math.min(Integer.MAX_VALUE, bufferEndFrame - bufferStartFrame));
 	}
 	
 	public byte[] read(int frames) throws OggException {
@@ -194,22 +194,28 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 
 	@Override
 	public boolean trySkipTo(double time) throws OggException {
-		if (bufferEndFrame < time) {
+		long targetFrame = (int)Math.floor(time * getFrameRate());
+		while (bufferEndFrame < targetFrame && !packets.isEmpty()) {
 			bout.reset();
+			
+			Packet packet = packets.poll();
+			processPacket(packet);
+		}
+		
+		if (bufferEndFrame < targetFrame) {
 			return false;
 		}
 		
-		double skipTime = bufferEndFrame - time;
-		int skipBytes = (int)Math.round(skipTime * getFrameRate() * getFrameSize());
+		long skipFrames = Math.max(0, targetFrame - Math.max(0, bufferStartFrame));
+		long skipBytes = skipFrames * getFrameSize();
 
-		if (skipBytes > 0) {			
-			if (skipBytes < bout.size()) {
-				byte bytes[] = bout.toByteArray();
-				bout.reset();
-				bout.write(bytes, skipBytes, bytes.length - skipBytes);
-			} else {
-				bout.reset();
-			}
+		if (skipBytes < bout.size()) {
+			byte bytes[] = bout.toByteArray();
+			bout.reset();
+			bout.write(bytes, (int)skipBytes, bytes.length - (int)skipBytes);
+		} else {
+			bout.reset();
+			bufferStartFrame = bufferEndFrame;
 		}
 		
 		return true;
