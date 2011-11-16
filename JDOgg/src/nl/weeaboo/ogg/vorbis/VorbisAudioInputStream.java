@@ -19,20 +19,35 @@
 
 package nl.weeaboo.ogg.vorbis;
 
+import java.io.IOException;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 
 public class VorbisAudioInputStream extends AudioInputStream {
 
+	private final VorbisDecoderInputStream vin;
+	
 	public VorbisAudioInputStream(VorbisDecoderInputStream in,
 			AudioFormat format, long length)
 	{
 		super(in, format, length);
+		
+		vin = in;
 	}
 	
 	//Functions
-    
+	public void seekTo(double time) throws IOException {
+		vin.seekTo(time);
+	}
+	
 	//Getters
+	public double getTime() {
+		return vin.getTime();
+	}
+	public double getEndTime() {
+		return vin.getEndTime();
+	}
 	
 	//Setters
 	

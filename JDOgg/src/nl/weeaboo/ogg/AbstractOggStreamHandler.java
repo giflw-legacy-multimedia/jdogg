@@ -74,11 +74,9 @@ public abstract class AbstractOggStreamHandler<T> implements OggStreamHandler<T>
 			while (isUnsynced() && !packets.isEmpty()) {
 				processPacket(packets.poll());
 			}
+		}
+		if (isUnsynced()) {
 			clearBuffer();
-		} else {
-			if (isUnsynced()) {
-				clearBuffer();
-			}
 		}
 		return !isUnsynced();
 	}

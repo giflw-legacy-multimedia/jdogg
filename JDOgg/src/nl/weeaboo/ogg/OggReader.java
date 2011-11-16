@@ -194,31 +194,41 @@ public class OggReader {
 		}
 	}
 	
-	public void seekExact(OggStreamHandler<?> primary, double frac) throws IOException {
+	public void seekExactTime(OggStreamHandler<?> primary, double time) throws IOException {
+		if (isSeekable() && primary.getEndTime() > 0) {
+			seekExactFrac(primary, (primary.getEndTime() > 0 ? time / primary.getEndTime() : 0));
+		} else {			
+			while (!isEOF() && !primary.trySkipTo(time)) {
+				read();
+			}
+		}		
+	}
+	public void seekExactFrac(OggStreamHandler<?> primary, double frac) throws IOException {
 		if (!isSeekable()) {
 			throw new IOException("Current OggInput isn't seekable");
 		}
 
 		double min = 0.0;
 		double max = 1.0;
+
+		double time = (primary.getEndTime() > 0 ? frac * primary.getEndTime() : 0);
 		double guess = frac;
-		double endTime = primary.getEndTime();
-		double time = frac * endTime;
-		
 		double lastGuess = 0;
-		double lastError = Float.MAX_VALUE;
+		double lastError = Float.MAX_VALUE;		
 		
 		do {
-			//System.out.println(guess + " " + min + " " + max + " " + lastError);
-			
+			//Seek approximately to correct position
 			seekApprox(guess);
+			
+			//Sync primary stream
 			while (!isEOF() && !primary.trySync()) {
 				read();
 			}
 			
-			double curTime = (primary.getTime() >= 0 ? primary.getTime() : endTime);
+			double curTime = Math.max(0, primary.getTime());
 			double error = Math.abs(curTime - time);
 			if (error < lastError) {
+				//Try to improve our guess
 				if (curTime > time) {
 					max = guess;
 				} else {
@@ -234,36 +244,23 @@ public class OggReader {
 				break;
 			}			
 		} while (true);
-				
+
+		/*
+		//Shouldn't be required
 		seekApprox(guess);
 		while (!isEOF() && !primary.trySync()) {
 			read();
 		}
+		*/
 		
-		//Go forth from the keyframe onward
+		//We're still only at the closest keyframe earlier than our target time
 		RandomOggInput rinput = (RandomOggInput)input;
 		if (!rinput.isReadSlow()) {
+			//Read forward linearly to exact time
 			while (!isEOF() && !primary.trySkipTo(time)) {
 				read();
 			}
 		}
-				
-		/*
-		boolean ok;
-		do {
-			ok = true;
-			for (OggStream stream : getStreams()) {
-				OggStreamHandler<?> h = stream.getHandler();
-				if (h != null && !primary.trySkipTo(time)) {
-					ok = false;
-					break;
-				}
-			}
-			if (!ok) {
-				read();
-			}
-		} while (!ok);
-		*/
 	}
 	public void seekApprox(double frac) throws IOException {
 		if (!isSeekable()) {

@@ -3,7 +3,7 @@
 <!-- Initialize Properties -->
 	
   <property name="build.sysclasspath" value="ignore"/>
-  <property name="project-name" value="jdogg-0.3.4"/>
+  <property name="project-name" value="jdogg-0.3.5"/>
         
   <path id="classpath">
     <fileset dir="." includes="lib/**/*.jar" />
