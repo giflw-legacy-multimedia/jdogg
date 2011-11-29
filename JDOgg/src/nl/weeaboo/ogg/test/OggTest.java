@@ -51,7 +51,7 @@ public class OggTest {
 		reader.readStreamHeaders();		
 		
 		double audioSync = 0.1;
-		AudioSink asink = new AudioSink(vorbisd.getAudioFormat());
+		AudioSink asink = new AudioSink(vorbisd.getAudioFormat(), Executors.defaultThreadFactory());
 		asink.start();
 
 		long lastTime = System.nanoTime();
@@ -67,7 +67,7 @@ public class OggTest {
 					}
 					reader.read();
 				}
-				asink.buffer(vorbisd.read());
+				asink.buffer(vorbisd);
 			}
 
 			//Sync
@@ -102,7 +102,7 @@ public class OggTest {
 		System.out.printf("Time Spent: %.2fms\n", (System.nanoTime()-t0)/1000000.0);
 		System.exit(1337);		
 		*/
-
+		
 		Player.main(args);
 	}
 	

@@ -25,12 +25,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import nl.weeaboo.ogg.theora.VideoFrame;
 
-public class DefaultVideoSink implements VideoSink {
+public class RGBVideoSink implements VideoSink {
 
 	private final AtomicReference<IntBuffer> pixels;
 	private final Dimension size;
 	
-	public DefaultVideoSink() {
+	public RGBVideoSink() {
 		pixels = new AtomicReference<IntBuffer>();
 		size = new Dimension();
 	}
