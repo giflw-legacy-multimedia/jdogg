@@ -1,9 +1,8 @@
 package nl.weeaboo.ogg.theora;
 
-import java.awt.image.ColorModel;
-import java.awt.image.ImageConsumer;
 import java.nio.IntBuffer;
-import java.util.Hashtable;
+
+import nl.weeaboo.ogg.player.YUVBufferPixelGrabber;
 
 import com.fluendo.jheora.YUVBuffer;
 
@@ -50,23 +49,7 @@ public class VideoFrame {
 	public IntBuffer getRGB() {
 		if (rgb == null) {
 			synchronized (yuvBuffer) {
-				yuvBuffer.startProduction(new ImageConsumer() {
-					public void setDimensions(int width, int height) {
-					}
-					public void setProperties(Hashtable<?, ?> props) {
-					}
-					public void setColorModel(ColorModel model) {
-					}
-					public void setHints(int hintflags) {
-					}
-					public void setPixels(int x, int y, int w, int h, ColorModel model, byte[] pixels, int off, int scansize) {
-					}
-					public void setPixels(int x, int y, int w, int h, ColorModel model, int[] pixels, int off, int scansize) {
-						rgb = IntBuffer.wrap(pixels, off, scansize * (h-1) + w);
-					}
-					public void imageComplete(int status) {
-					}
-				});
+				rgb = YUVBufferPixelGrabber.getPixelsRGB(yuvBuffer);
 			}
 		}
 		return rgb;

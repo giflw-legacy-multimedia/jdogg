@@ -227,6 +227,8 @@ public class OggReader {
 			
 			double curTime = Math.max(0, primary.getTime());
 			double error = Math.abs(curTime - time);
+			
+			//System.out.println(guess + " " + curTime + " " + time + " " + error);
 			if (error < lastError) {
 				//Try to improve our guess
 				if (curTime > time) {
@@ -242,16 +244,13 @@ public class OggReader {
 				//Error increases or stayed the same, use last estimate.
 				guess = lastGuess;
 				break;
-			}			
+			}
 		} while (true);
 
-		/*
-		//Shouldn't be required
 		seekApprox(guess);
 		while (!isEOF() && !primary.trySync()) {
 			read();
 		}
-		*/
 		
 		//We're still only at the closest keyframe earlier than our target time
 		RandomOggInput rinput = (RandomOggInput)input;

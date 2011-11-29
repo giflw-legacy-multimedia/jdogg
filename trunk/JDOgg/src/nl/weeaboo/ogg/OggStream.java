@@ -73,7 +73,8 @@ public class OggStream {
 		int res = streamState.packetout(packet);
 		if (res < 0) {
 			error = true;
-			throw new OggException(String.format("Error in StreamState.packetout() :: %d", res));
+			//throw new OggException(String.format("Error in StreamState.packetout() :: %d", res));
+			return false;
 		} else if (res == 0) {
 			needsMoreData = true;
 			return false;
@@ -85,8 +86,7 @@ public class OggStream {
 		} else {
 			if (packet.b_o_s != 0) {
 				beginPacket = StreamUtil.clone(packet);
-				codec = OggCodec.fromSignature(packet.packet_base,
-							packet.packet, packet.bytes);
+				codec = OggCodec.fromSignature(packet.packet_base, packet.packet, packet.bytes);
 			}
 			
 			if (packet.e_o_s != 0) {

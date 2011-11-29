@@ -19,21 +19,23 @@
 
 package nl.weeaboo.ogg.vorbis;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import javax.sound.sampled.AudioFormat;
+
+import nl.weeaboo.ogg.AbstractOggStreamHandler;
+import nl.weeaboo.ogg.CircularBuffer;
+import nl.weeaboo.ogg.OggCodec;
+import nl.weeaboo.ogg.OggException;
+import nl.weeaboo.ogg.CircularByteBuffer;
 
 import com.jcraft.jogg.Packet;
 import com.jcraft.jorbis.Block;
 import com.jcraft.jorbis.Comment;
 import com.jcraft.jorbis.DspState;
 import com.jcraft.jorbis.Info;
-
-import nl.weeaboo.ogg.AbstractOggStreamHandler;
-import nl.weeaboo.ogg.OggCodec;
-import nl.weeaboo.ogg.OggException;
 
 public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 
@@ -49,7 +51,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	private long bufferStartFrame, bufferEndFrame;
 	
 	private byte[] temp;
-	private ByteArrayOutputStream bout;
+	private CircularBuffer buffer;
 	
 	public VorbisDecoder() {
 		super(OggCodec.Vorbis, true);
@@ -61,15 +63,21 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 
 		bufferStartFrame = bufferEndFrame = -1;
 
-		temp = new byte[4096];
-		bout = new ByteArrayOutputStream();
+		temp = new byte[8192];
+		buffer = new CircularByteBuffer(8 << 10);
 	}
 	
 	//Functions
+	private void ensureTempSize(int bytes) {
+		if (temp.length < bytes) {
+			temp = new byte[Math.max(temp.length*2, bytes)];
+		}
+	}
+	
 	@Override
 	public void clearBuffer() {
 		packets.clear();
-		bout.reset();
+		buffer.clear();
 		
 		bufferStartFrame = bufferEndFrame;
 	}
@@ -122,10 +130,8 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		while ((samples = dspState.synthesis_pcmout(pcm, index)) > 0) {
 			float[][] p = pcm[0];
 			int len = samples * frameSize;
-			if (temp.length < len) {
-				temp = new byte[len];
-			}
-
+			ensureTempSize(len);
+			
 			for (int ch = 0; ch < info.channels; ch++) {
 				int ptr = (ch << 1);
 				for (int j = 0; j < samples; j++) {
@@ -143,7 +149,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 				}
 			}
 			
-			bout.write(temp, 0, len);
+			buffer.put(temp, 0, len);
 			
 			if (dspState.synthesis_read(samples) < 0) {
 				break;
@@ -151,18 +157,30 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		}
 		
 		bufferEndFrame = packet.granulepos;
+		if (bufferStartFrame < 0) {
+			bufferStartFrame = bufferEndFrame;
+		}
 	}
 	
 	@Override
 	public byte[] read() throws IOException {
-		return read((int)Math.min(Integer.MAX_VALUE, bufferEndFrame - bufferStartFrame));
+		ByteBuffer tempBuffer = ByteBuffer.wrap(temp);
+		int r = read(tempBuffer);
+		return Arrays.copyOfRange(temp, 0, r);
+	}
+
+	public int read(ByteBuffer out) throws OggException {
+		if (!out.hasRemaining()) {
+			return 0;
+		}		
+		return read0(out, out.remaining());
 	}
 	
-	public byte[] read(int frames) throws OggException {
-		if (frames > bufferEndFrame - bufferStartFrame) {
-			throw new IllegalArgumentException(String.format("Can't read %d frames, only %d buffered.", frames, bufferEndFrame-bufferStartFrame));
-		}
-		
+	public int read(CircularBuffer out) throws OggException {
+		return read0(out, Integer.MAX_VALUE);
+	}
+	
+	private int read0(Object out, int outLimit) throws OggException {
 		if (!hasReadHeaders()) {
 			throw new OggException("Haven't read headers yet");
 		}
@@ -171,32 +189,48 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 			Packet packet = packets.poll();
 			processPacket(packet);
 		}
-		
-		byte result[] = bout.toByteArray();
-		bout.reset();		
 
 		int frameSize = getFrameSize();
-		int offset = frames * frameSize;
-		if (offset <= 0 || offset >= result.length) {
-			bufferStartFrame = bufferEndFrame;
-			return result;
-		} else {			
-			bufferStartFrame += frames;
-			bout.write(result, offset, result.length - offset);
-			return Arrays.copyOf(result, offset);
+		int outFrames = Math.min(outLimit, buffer.size()) / frameSize;		
+		int outBytes = outFrames * frameSize;
+		
+		if (out instanceof ByteBuffer) {
+			ByteBuffer bout = (ByteBuffer)out;
+			if (bout.hasArray()) {
+				buffer.get(bout.array(), bout.arrayOffset()+bout.position(), outBytes);
+				bout.position(bout.position()+outBytes);
+			} else {
+				ensureTempSize(outBytes);
+				buffer.get(temp, 0, outBytes);
+				bout.put(temp, 0, outBytes);
+			}
+		} else {
+			CircularBuffer cout = (CircularBuffer)out;
+			ensureTempSize(outBytes);
+			buffer.get(temp, 0, outBytes);
+			cout.put(temp, 0, outBytes);
 		}
+		
+		if (buffer.size() == 0) {
+			bufferStartFrame = bufferEndFrame;
+		} else {
+			bufferStartFrame += outFrames;
+		}
+		
+		return outBytes;
 	}
 
 	@Override
 	public boolean available() {
-		return packets.size() > 0 || bout.size() > 0;
+		return packets.size() > 0 || buffer.size() > 0;
 	}
 
 	@Override
 	public boolean trySkipTo(double time) throws OggException {
 		long targetFrame = (int)Math.floor(time * getFrameRate());
 		while (bufferEndFrame < targetFrame && !packets.isEmpty()) {
-			bout.reset();
+			buffer.clear();
+			bufferStartFrame = bufferEndFrame;
 			
 			Packet packet = packets.poll();
 			processPacket(packet);
@@ -209,12 +243,11 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		long skipFrames = Math.max(0, targetFrame - Math.max(0, bufferStartFrame));
 		long skipBytes = skipFrames * getFrameSize();
 
-		if (skipBytes < bout.size()) {
-			byte bytes[] = bout.toByteArray();
-			bout.reset();
-			bout.write(bytes, (int)skipBytes, bytes.length - (int)skipBytes);
+		if (skipFrames < getFramesBuffered()) {
+			buffer.skip((int)skipBytes);
+			bufferStartFrame += skipFrames;
 		} else {
-			bout.reset();
+			buffer.clear();
 			bufferStartFrame = bufferEndFrame;
 		}
 		
@@ -271,6 +304,9 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		return 16;
 	}
 	public int getFramesBuffered() {
+		if (bufferStartFrame < 0 || bufferEndFrame < 0) {
+			return 0;
+		}
 		return (int)(bufferEndFrame - bufferStartFrame);
 	}
 	

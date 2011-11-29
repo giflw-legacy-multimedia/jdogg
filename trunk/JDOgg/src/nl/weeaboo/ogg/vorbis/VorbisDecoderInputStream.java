@@ -21,28 +21,36 @@ package nl.weeaboo.ogg.vorbis;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 
+import nl.weeaboo.ogg.CircularBuffer;
+import nl.weeaboo.ogg.CircularByteBuffer;
 import nl.weeaboo.ogg.OggReader;
 
 public class VorbisDecoderInputStream extends InputStream {
-
+	
 	protected final OggReader oggReader;
 	protected final VorbisDecoder vorbisDecoder;
-	private ByteBuffer buf;
+	private CircularBuffer buf;
 	
 	public VorbisDecoderInputStream(OggReader oggd, VorbisDecoder vorbisd) {
 		oggReader = oggd;
 		vorbisDecoder = vorbisd;
 		
-		buf = ByteBuffer.allocate(8<<1024);
-		buf.limit(0);
+		buf = new CircularByteBuffer(8 << 10);
 	}
 	
-	//Functions
+	//Functions	
 	@Override
 	public int read() throws IOException {
-		while (buf.remaining() <= 0) {
+		byte[] temp = new byte[1];
+		int r = read(temp, 0, 1);
+		if (r <= 0) return -1;
+		return temp[0] & 0xFF;
+	}
+	
+	@Override
+	public int read(byte[] b, int off, int len) throws IOException {
+		while (buf.size() <= 0) {
 			while (!oggReader.isEOF() && !vorbisDecoder.available()) {
 				oggReader.read();
 			}			
@@ -50,17 +58,10 @@ public class VorbisDecoderInputStream extends InputStream {
 				return -1;
 			}		
 			
-			byte[] read = vorbisDecoder.read();
-			if (buf.hasArray() && buf.capacity() >= read.length) {
-				buf.rewind();
-				buf.limit(read.length);
-				System.arraycopy(read, 0, buf.array(), buf.arrayOffset(), read.length);
-			} else {
-				buf = ByteBuffer.wrap(read);
-			}
+			vorbisDecoder.read(buf);
 		}
 		
-		return (buf.get() & 0xFF);
+		return buf.get(b, off, len);
 	}
 	
 	public void seekTo(double time) throws IOException {

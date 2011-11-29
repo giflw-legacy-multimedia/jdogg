@@ -235,13 +235,19 @@ public class Player implements Runnable {
 						break;
 					}
 					
+					/*
 					byte bytes[] = vorbisd.read();
 					double time = vorbisd.getTime();
 					asink.buffer(bytes, time);
+					*/
 					
+					int w = asink.buffer(vorbisd);
 					if (targetTime < 0) {
 						targetTime = asink.getTime();
-					}
+					}					
+					if (w <= 0) {
+						break;
+					}					
 				}
 							
 				//Sync

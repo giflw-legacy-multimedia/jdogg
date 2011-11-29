@@ -120,8 +120,7 @@ public class TheoraDecoder extends AbstractOggStreamHandler<VideoFrame> {
 		bufferStartTime = bufferEndTime;
 		
 		double frameDuration = videoFormat.getFrameDuration();
-		frames.add(new VideoFrame(yuvBuffer, w, h, bufferEndTime - frameDuration,
-				frameDuration));
+		frames.add(new VideoFrame(yuvBuffer, w, h, bufferEndTime - frameDuration, frameDuration));
 	}
 	
 	protected boolean touchPacket(Packet packet) {
