@@ -54,7 +54,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 	private CircularBuffer buffer;
 	
 	public VorbisDecoder() {
-		super(OggCodec.Vorbis, true);
+		super(OggCodec.Vorbis, false);
 
 		info = new Info();
 		comment = new Comment();
@@ -64,7 +64,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		bufferStartFrame = bufferEndFrame = -1;
 
 		temp = new byte[8192];
-		buffer = new CircularByteBuffer(8 << 10);
+		buffer = new CircularByteBuffer(8 << 10, 32 << 20);
 	}
 	
 	//Functions
@@ -176,8 +176,8 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		return read0(out, out.remaining());
 	}
 	
-	public int read(CircularBuffer out) throws OggException {
-		return read0(out, Integer.MAX_VALUE);
+	public int read(CircularByteBuffer out) throws OggException {
+		return read0(out, out.getMaxCapacity() - out.size() - 1);
 	}
 	
 	private int read0(Object out, int outLimit) throws OggException {
@@ -207,6 +207,7 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 		} else {
 			CircularBuffer cout = (CircularBuffer)out;
 			ensureTempSize(outBytes);
+			
 			buffer.get(temp, 0, outBytes);
 			cout.put(temp, 0, outBytes);
 		}
@@ -245,7 +246,9 @@ public class VorbisDecoder extends AbstractOggStreamHandler<byte[]> {
 
 		if (skipFrames < getFramesBuffered()) {
 			buffer.skip((int)skipBytes);
-			bufferStartFrame += skipFrames;
+			if (bufferStartFrame >= 0) {
+				bufferStartFrame += skipFrames;
+			}
 		} else {
 			buffer.clear();
 			bufferStartFrame = bufferEndFrame;

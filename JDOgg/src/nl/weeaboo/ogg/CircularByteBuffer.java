@@ -28,31 +28,30 @@ public class CircularByteBuffer implements CircularBuffer {
 	private int maxCapacity;
 	private int begin, end;
 	
-	public CircularByteBuffer(int initialCapacity) {
+	public CircularByteBuffer(int initialCapacity, int initialMaxCapacity) {
 		capacity = initialCapacity;
-		maxCapacity = (32<<20);
+		maxCapacity = initialMaxCapacity;
 	}
 	
 	//Functions
-	protected ByteBuffer allocateBuffer(int initialCapacity) {
-		return ByteBuffer.allocate(initialCapacity);
+	protected ByteBuffer allocateBuffer(int capacity) {
+		return ByteBuffer.allocate(capacity);
 	}
 
 	private void ensureBufferCapacity(int minCapacity) {
-		if (buffer == null || capacity < minCapacity) {
+		if (buffer == null || capacity <= minCapacity) {
 			int maxCapacity = getMaxCapacity();
-			int desiredCapacity = Math.max(buffer == null ? capacity : capacity*2, minCapacity);
-			int newCapacity = Math.min(maxCapacity, desiredCapacity);
-			if (newCapacity < minCapacity) {
-				throw new IllegalStateException("Required capacity (" + capacity + ") > maxCapacity (" + maxCapacity + ")");
+			int desiredCapacity = Math.max(Math.min(maxCapacity, capacity * (buffer==null?1:2)), minCapacity+1);
+			if (desiredCapacity > maxCapacity) {
+				throw new IllegalStateException("Required capacity (" + minCapacity + ") >= maxCapacity (" + maxCapacity + ")");
 			}
 						
-			ByteBuffer b = allocateBuffer(newCapacity);
+			ByteBuffer b = allocateBuffer(desiredCapacity);
 			int r = get(b);
 			buffer = b;
 			begin = 0;
 			end = r;
-			capacity = newCapacity;
+			capacity = desiredCapacity;
 		}
 	}
 	

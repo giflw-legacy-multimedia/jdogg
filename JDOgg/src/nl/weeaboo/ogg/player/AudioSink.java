@@ -19,7 +19,6 @@
 
 package nl.weeaboo.ogg.player;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.ThreadFactory;
 
 import javax.sound.sampled.AudioFormat;
@@ -29,6 +28,7 @@ import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
+import nl.weeaboo.ogg.CircularByteBuffer;
 import nl.weeaboo.ogg.OggException;
 import nl.weeaboo.ogg.vorbis.VorbisDecoder;
 
@@ -42,10 +42,12 @@ public class AudioSink {
 	private int bytesPerFrame;
 	private ThreadFactory threadFactory;
 	
-	private ByteBuffer buffer;
+	private CircularByteBuffer buffer;
 	private SourceDataLine line;
 	private long written;
 	private double bufferEndTime;
+
+	private byte[] temp;
 	
 	public AudioSink(AudioFormat fmt, ThreadFactory tfac) {
 		format = fmt;
@@ -53,17 +55,10 @@ public class AudioSink {
 		bytesPerSecond = bytesPerFrame * format.getFrameRate();
 		threadFactory = tfac;
 		
-		buffer = ByteBuffer.allocate(64 << 10);
+		buffer = new CircularByteBuffer(16<<10, 256<<10);
 	}
 	
 	//Functions
-	private void resizeBuffer(int minCapacity) {
-		int c = Math.max(buffer.capacity() * 2, minCapacity);
-		ByteBuffer b = ByteBuffer.allocate(c);
-		b.put(buffer);
-		buffer = b;
-	}
-	
 	public synchronized void start() throws LineUnavailableException, InterruptedException {
 		start(10, .25f);
 	}
@@ -79,8 +74,6 @@ public class AudioSink {
 		if (line == null) {
 			return;
 		}
-
-		resizeBuffer((int)Math.round(bytesPerSecond * lineBufferDuration * 2));
 		
 		line.open(format, (int)Math.round(bytesPerSecond * lineBufferDuration));
 		line.start();
@@ -114,9 +107,6 @@ public class AudioSink {
 	}
 	
 	public synchronized int buffer(VorbisDecoder d) throws OggException {
-		if (buffer.remaining() < d.getFrameSize()) {
-			resizeBuffer(buffer.position() + d.getFrameSize());
-		}		
 		int r = d.read(buffer);
 		if (r > 0) {
 			bufferEndTime = d.getTime();
@@ -127,36 +117,18 @@ public class AudioSink {
 		buffer(b, 0, b.length, etime);
 	}
 	public synchronized void buffer(byte b[], int off, int len, double etime) {
-		if (buffer.remaining() < len) {
-			resizeBuffer(buffer.position() + len);
-		}
-
 		buffer.put(b, off, len);		
 		bufferEndTime = etime;
 	}
-	
-	public synchronized void skipBytes(int bytes) {
-		advanceBytes(bytes);
-	}
-	
-	protected void advanceBytes(int skip) {
-		//Skip regular-buffered bytes
-		skip = Math.min(Math.max(0, skip), buffer.position());
-		int newpos = buffer.position() - skip;
-		for (int d = 0, s = skip; d < newpos; d++, s++) {
-			buffer.put(d, buffer.get(s));
-		}
-		buffer.position(newpos);
-	}
-	
+		
 	public synchronized void skipTime(double time) {
 		int bytes = (int)Math.min(Integer.MAX_VALUE, Math.round(time * bytesPerSecond));
 		
-		skipBytes(bytes);
+		buffer.skip(bytes);
 	}
 	
 	public synchronized void reset() {
-		buffer.rewind();
+		buffer.clear();
 		if (line != null) {
 			line.flush();
 			
@@ -169,22 +141,39 @@ public class AudioSink {
 			return;
 		}		
 		
-		if (buffer.position() < line.available()) {
+		if (buffer.size() < line.available()) {
 			//System.err.print("[audio sink buffer underrun]"); 
 		}
 		
-		int len = Math.min(line.available(), buffer.position());
+		int len = Math.min(line.available(), buffer.size());
 		if (len == 0) {
 			return;
 		}
 		
-		int w = line.write(buffer.array(), buffer.arrayOffset(), len);
-		if (w > 0) {
-			advanceBytes(w);
+		if (temp == null || temp.length < len) {
+			temp = new byte[len];
+		}
+		buffer.get(temp, 0, len);
 		
-			//written = line.getLongFramePosition() * (format.getSampleSizeInBits() >> 3);
+		int wr = 0;
+		while (wr < len) {
+			int w = line.write(temp, wr, len - wr);
+			if (w < 0) break;
+			wr += w;
 			written += w;
-		}		
+		}
+	}
+	
+	public synchronized void drain() {
+		while (buffer.size() > 0) {
+			flush();
+			
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+				//Ignore
+			}
+		}
 	}
 	
 	//Getters
@@ -195,7 +184,7 @@ public class AudioSink {
 	}
 	public synchronized long getBufferLength() {
 		long lineBuffered = 0; //line.getBufferSize() - line.available();
-		return buffer.position() + lineBuffered;
+		return buffer.size() + lineBuffered;
 	}
 	public synchronized double getBufferDuration() {
 		return getBufferLength() / bytesPerSecond;

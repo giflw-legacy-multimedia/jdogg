@@ -22,7 +22,6 @@ package nl.weeaboo.ogg.vorbis;
 import java.io.IOException;
 import java.io.InputStream;
 
-import nl.weeaboo.ogg.CircularBuffer;
 import nl.weeaboo.ogg.CircularByteBuffer;
 import nl.weeaboo.ogg.OggReader;
 
@@ -30,13 +29,13 @@ public class VorbisDecoderInputStream extends InputStream {
 	
 	protected final OggReader oggReader;
 	protected final VorbisDecoder vorbisDecoder;
-	private CircularBuffer buf;
+	private CircularByteBuffer buf;
 	
 	public VorbisDecoderInputStream(OggReader oggd, VorbisDecoder vorbisd) {
 		oggReader = oggd;
 		vorbisDecoder = vorbisd;
 		
-		buf = new CircularByteBuffer(8 << 10);
+		buf = new CircularByteBuffer(8 << 10, 32 << 10);
 	}
 	
 	//Functions	

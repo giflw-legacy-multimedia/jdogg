@@ -61,15 +61,16 @@ public class OggTest {
 			
 			//Read vorbis data
 			while (targetTime < 0 || targetTime > vorbisd.getTime() - audioSync) {
+				if (reader.isEOF()) {
+					break;
+				}
+
 				if (!vorbisd.available()) {
-					if (reader.isEOF()) {
-						break;
-					}
 					reader.read();
 				}
 				asink.buffer(vorbisd);
 			}
-
+			
 			//Sync
 			long curTime = System.nanoTime();
 			if (targetTime >= 0) {
@@ -78,9 +79,7 @@ public class OggTest {
 				//Sync audio
 				double atime = asink.getTime();
 				double adiff = targetTime - atime;
-				if (atime >= 0 && Math.abs(adiff) > audioSync
-						&& asink.getBufferLength() > 0)
-				{
+				if (atime >= 0 && Math.abs(adiff) > audioSync && asink.getBufferLength() > 0) {
 					targetTime -= adiff * Math.min(1.0, 10 * dt);
 				}
 				
@@ -97,6 +96,7 @@ public class OggTest {
 		}
 		input.close();
 		asink.stop();
+		//asink.drain();
 		
 		System.out.printf("Memory Used: %.2fMB\n", maxMem / (double)(1<<20));
 		System.out.printf("Time Spent: %.2fms\n", (System.nanoTime()-t0)/1000000.0);
