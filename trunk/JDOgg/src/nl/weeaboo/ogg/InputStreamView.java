@@ -28,7 +28,7 @@ public class InputStreamView extends FilterInputStream {
 	private long markPosition;
 	private long position;
 	private long limit;
-	private boolean closed;
+	private volatile boolean closed;
 	
 	public InputStreamView(InputStream in, long len) {
 		super(in);
