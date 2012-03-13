@@ -198,13 +198,12 @@ public class AudioSink {
 				if (vol == 0) {
 					volumeControl.setValue(volumeControl.getMinimum());
 				} else {					
-					double minimum = volumeControl.getMinimum();
-					double maximum = volumeControl.getMaximum();
-					double xMin = Math.pow(10, minimum * .1);						
-					double xMax = Math.pow(10, maximum * .1);
-					double db = 10.0 * Math.log10(xMin + (vol * vol) * (xMax-xMin));
+					float minimum = volumeControl.getMinimum();
+					float maximum = volumeControl.getMaximum();
 		
-					volumeControl.setValue((float)db);
+					double db = Math.log10(vol) * 20; //Map linear volume to logarithmic dB scale
+					
+					volumeControl.setValue(Math.max(minimum, Math.min(maximum, (float)db)));
 				}
 			} catch (IllegalArgumentException iae) {
 				throw new RuntimeException(iae);
