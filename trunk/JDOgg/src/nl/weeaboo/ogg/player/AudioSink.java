@@ -141,10 +141,6 @@ public class AudioSink {
 			return;
 		}		
 		
-		if (buffer.size() < line.available()) {
-			//System.err.print("[audio sink buffer underrun]"); 
-		}
-		
 		int len = Math.min(line.available(), buffer.size());
 		if (len == 0) {
 			return;
@@ -155,13 +151,15 @@ public class AudioSink {
 		}
 		buffer.get(temp, 0, len);
 		
+		//System.out.println(line.getBufferSize() - line.available());
+		
 		int wr = 0;
 		while (wr < len) {
 			int w = line.write(temp, wr, len - wr);
 			if (w < 0) break;
 			wr += w;
 			written += w;
-		}
+		}		
 	}
 	
 	public synchronized void drain() {

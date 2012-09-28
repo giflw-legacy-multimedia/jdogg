@@ -40,8 +40,10 @@ import nl.weeaboo.ogg.vorbis.VorbisDecoder;
 
 public class Player implements Runnable {
 
-	private final double audioSync = 0.1;
-
+	private static final double AUDIO_SYNC_SECONDS = 0.100;
+	private static final double IDLE_WAIT_SECONDS  = 0.100;
+	private static final double MIN_WAIT_SECONDS   = 0.001;
+	
 	private volatile Thread thread;
 	private volatile boolean stop;
 	private volatile boolean pauseState;
@@ -192,64 +194,74 @@ public class Player implements Runnable {
 						
 			double targetTime = -1;
 			long lastTime = System.nanoTime();		
-			while (!stop) {				
-				//Process Theora
-				while (targetTime < 0 || targetTime >= theorad.getTime()) {
-					while (!oggReader.isEOF() && !theorad.available()) {
-						oggReader.read();
-					}
-					if (!theorad.available()) break;
-					
-					if (targetTime >= 0) {
-						//Skip frame if it's too late
-						VideoFormat fmt = theorad.getVideoFormat();
-						double vtime = theorad.getTime();
-						double frameTime = fmt.getFrameDuration();
-						if (vtime >= 0 && vtime + frameTime < targetTime) {
-							theorad.skip();
-							continue;
-						}
-					}
-					
-					VideoFrame frame = theorad.read();
-					if (frame == null) continue;
-					vsink.display(frame);
-					if (targetTime < 0) break;					
-				}				
+			while (!stop) {			
+				boolean hasVideo = theorad.hasReadHeaders();
+				boolean hasAudio = vorbisd.hasReadHeaders();
 				
+				//Process Theora
+				if (hasVideo) { //If we've found a valid Theora stream
+					while (targetTime < 0 || targetTime >= theorad.getTime()) {
+						while (!oggReader.isEOF() && !theorad.available()) {
+							oggReader.read();
+						}
+						if (!theorad.available()) break;
+						
+						if (targetTime >= 0) {
+							//Skip frame if it's too late
+							VideoFormat fmt = theorad.getVideoFormat();
+							double vtime = theorad.getTime();
+							double frameTime = fmt.getFrameDuration();
+							if (vtime >= 0 && vtime + frameTime < targetTime) {
+								theorad.skip();
+								continue;
+							}
+						}
+						
+						VideoFrame frame = theorad.read();
+						if (frame == null) continue;
+						vsink.display(frame);
+						if (targetTime < 0) break;					
+					}					
+				}
+					
 				if (targetTime < 0) {
-					targetTime = theorad.getTime();
+					if (hasVideo) {
+						targetTime = theorad.getTime();
+					}
+					
 					vorbisd.clearBuffer();
 					if (asink != null) asink.reset();
-				}
-								
+				}					
+				
 				//System.out.printf("T=%.2f V=%.2f A=%.2f DIFF=%.2f\n", targetTime, theorad.getTime(), asink.getTime(), theorad.getTime() - asink.getTime());			
 				
 				//Process Vorbis
-				while (targetTime < 0 || targetTime >= vorbisd.getTime() - 0.50) {
-					while (!oggReader.isEOF() && !vorbisd.available()) {
-						oggReader.read();
+				if (hasAudio) {
+					while (targetTime < 0 || targetTime >= vorbisd.getTime() - 0.50) {
+						while (!oggReader.isEOF() && !vorbisd.available()) {
+							oggReader.read();
+						}
+						
+						if (!vorbisd.available()) {
+							break;
+						}
+						
+						/*
+						byte bytes[] = vorbisd.read();
+						double time = vorbisd.getTime();
+						asink.buffer(bytes, time);
+						*/
+						
+						int w = asink.buffer(vorbisd);
+						if (targetTime < 0) {
+							targetTime = asink.getTime();
+						}					
+						if (w <= 0) {
+							break;
+						}					
 					}
-					
-					if (!vorbisd.available()) {
-						break;
-					}
-					
-					/*
-					byte bytes[] = vorbisd.read();
-					double time = vorbisd.getTime();
-					asink.buffer(bytes, time);
-					*/
-					
-					int w = asink.buffer(vorbisd);
-					if (targetTime < 0) {
-						targetTime = asink.getTime();
-					}					
-					if (w <= 0) {
-						break;
-					}					
 				}
-							
+				
 				//Sync
 				long curTime = System.nanoTime();
 				if (targetTime >= 0) {
@@ -259,9 +271,7 @@ public class Player implements Runnable {
 					if (asink != null) {
 						double atime = asink.getTime();
 						double adiff = targetTime - atime;
-						if (atime >= 0 && Math.abs(adiff) > audioSync
-								&& asink.getBufferLength() > 0)
-						{
+						if (atime >= 0 && Math.abs(adiff) > AUDIO_SYNC_SECONDS && asink.getBufferLength() > 0) {
 							targetTime -= adiff * Math.min(1.0, 10 * dt);
 						}
 					}
@@ -273,19 +283,26 @@ public class Player implements Runnable {
 				//Limit time
 				double vwait = theorad.getTime() - targetTime;
 				double await = (asink != null ? asink.getBufferDuration() : vwait);
-				double w = Math.min(vwait, await);
 				
-				if (w >= 0.001) {
+				double w;
+				if (hasVideo) {
+					w = (hasAudio ? Math.min(vwait, await) : 0);
+				} else if (hasAudio) {
+					w = await;
+				} else {
+					w = IDLE_WAIT_SECONDS;
+				}
+				
+				if (w >= MIN_WAIT_SECONDS) {
 					sleep(w);
 				}
 				
 				//Go sleep for a bit if there's nothing more to do
-				ended = oggReader.isEOF() && !theorad.available()
-					&& !vorbisd.available();
+				ended = oggReader.isEOF() && !theorad.available() && !vorbisd.available();
 				
 				if (ended) {
 					pauseRequest = true;
-					sleep(0.1);
+					sleep(IDLE_WAIT_SECONDS);
 				}
 				
 				//Handle requests from Player
@@ -311,22 +328,33 @@ public class Player implements Runnable {
 					
 					//Fuck Yeah Seeking
 					if (seekRequest >= 0 && oggReader.isSeekable()) {
-						//if (!oggReader.isSeekSlow()) {
-							oggReader.seekExactFrac((theorad != null ? theorad : vorbisd), seekRequest);
-						//} else {
-						//	oggReader.seekApproxFrac(seekRequest);
-						//}
+						if (hasVideo) {
+							oggReader.seekExactFrac(theorad, seekRequest);
+							//	oggReader.seekApproxFrac(seekRequest);
+						} else if (hasAudio) {
+							oggReader.seekExactFrac(vorbisd, seekRequest);
+						}
 						lastTime = System.nanoTime();
 						
 						targetTime = -1;						
 						seekRequest = -1;
 					} else if (oggReader.isEOF()) {
 						control.onTimeChanged(theorad.getEndTime(), theorad.getEndTime(), 1f);
-					} else if (theorad.getTime() >= 0) {
-						double time = theorad.getTime();
-						double endTime = theorad.getEndTime();
-						double frac = (endTime < 0 ? -1 : time / endTime);
-						control.onTimeChanged(time, endTime, frac);
+					} else {
+						double time = -1;
+						double endTime = -1;
+						if (hasVideo && theorad.getTime() >= 0) {
+							time = theorad.getTime();
+							endTime = theorad.getEndTime();
+						} else if (hasAudio && vorbisd.getTime() >= 0) {
+							time = vorbisd.getTime();
+							endTime = vorbisd.getEndTime();
+						}
+						
+						if (time >= 0) {
+							double frac = (endTime < 0 ? -1 : time / endTime);
+							control.onTimeChanged(time, endTime, frac);
+						}
 					}
 				}
 			}		

@@ -50,7 +50,7 @@ public class OggTest {
 		reader.addStreamHandler(vorbisd);
 		reader.readStreamHeaders();		
 		
-		double audioSync = 0.1;
+		double audioSync = 0.2;
 		AudioSink asink = new AudioSink(vorbisd.getAudioFormat(), Executors.defaultThreadFactory());
 		asink.start();
 
