@@ -35,7 +35,7 @@ public class VorbisDecoderInputStream extends InputStream {
 		oggReader = oggd;
 		vorbisDecoder = vorbisd;
 		
-		buf = new CircularByteBuffer(8 << 10, 32 << 10);
+		buf = new CircularByteBuffer(8 << 10, 64 << 10);
 	}
 	
 	//Functions	
